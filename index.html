@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050505" />
+    <title>ECHO / FIELD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" id="appShell">
+      <header class="topbar">
+        <h1>ECHO / FIELD</h1>
+        <div class="top-actions">
+          <button class="text-button" id="howItWorks">HOW IT WORKS</button>
+          <button class="text-button" id="toggleInspector">INSPECTOR</button>
+          <button class="text-button" id="toggleSound">SOUND: OFF</button>
+          <div class="live-state"><span class="live-dot"></span><span id="statusText">IDLE</span></div>
+        </div>
+      </header>
+
+      <section class="instrument" aria-label="Echo Field instrument">
+        <aside class="input-rail">
+          <div class="rail-marker">01</div>
+          <button class="input-module active" data-mode="voice" aria-pressed="true">
+            <span class="module-title">VOICE</span>
+            <span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="module-code">&lt; mic.input &gt;</span>
+          </button>
+          <div class="rail-marker">02</div>
+          <button class="input-module" data-mode="motion" aria-pressed="false">
+            <span class="module-title">MOTION</span>
+            <span class="motion-glyph" aria-hidden="true">∞</span>
+            <span class="module-code">&lt; cursor.track &gt;</span>
+          </button>
+          <div class="rail-marker">03</div>
+          <button class="input-module" data-mode="memory" aria-pressed="false">
+            <span class="module-title">MEMORY</span>
+            <span class="memory-grid" aria-hidden="true"></span>
+            <span class="module-code">&lt; field.state &gt;</span>
+          </button>
+          <div class="rail-marker">04</div>
+          <button class="input-module" data-mode="vision" aria-pressed="false">
+            <span class="module-title">VISION</span>
+            <span class="vision-glyph" aria-hidden="true">⊙</span>
+            <span class="module-code">&lt; cam.track &gt;</span>
+          </button>
+        </aside>
+        <div class="canvas-wrap">
+          <canvas id="fieldCanvas" aria-label="A generative visual field responding to sound and movement"></canvas>
+          <div class="canvas-cursor" id="cursorOrb"></div>
+          <div class="field-label">FIELD <span id="fieldNumber">014</span></div>
+          <div class="canvas-hint" id="canvasHint">move through the field</div>
+          <video id="webcamVideo" autoplay playsinline style="display:none;"></video>
+          <canvas id="webcamCanvas" style="display:none;"></canvas>
+        </div>
+        <aside class="inspector" id="inspector" aria-label="Field inspector">
+          <div class="inspector-head"><span>INSPECTOR</span><button class="close-inspector" id="closeInspector" aria-label="Close inspector">×</button></div>
+          <div class="inspector-section palette-section">
+            <span class="section-label">PALETTE</span>
+            <div class="palette-options">
+              <button class="palette-choice selected" data-palette="prism"><span class="swatch prism"></span><span>PRISM</span></button>
+              <button class="palette-choice" data-palette="violet"><span class="swatch violet"></span><span>VIOLET</span></button>
+              <button class="palette-choice" data-palette="lime"><span class="swatch lime"></span><span>LIME</span></button>
+              <button class="palette-choice" data-palette="custom" id="customPaletteChoice"><span class="swatch custom" id="customSwatch"></span><span>CUSTOM</span></button>
+            </div>
+            <div class="custom-colors-row" id="customColorsRow" style="display: none; margin-top: 14px; gap: 8px; justify-content: space-between;">
+              <input type="color" id="customColor1" value="#a382ff" title="Color 1" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+              <input type="color" id="customColor2" value="#4ce1ff" title="Color 2" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+              <input type="color" id="customColor3" value="#c2f93c" title="Color 3" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+            </div>
+          </div>
+          <div class="inspector-section sliders">
+            <label>DENSITY <output id="densityValue">0.62</output><input id="density" type="range" min="0.2" max="1" value="0.62" step="0.01" /></label>
+            <label>DRIFT <output id="driftValue">0.34</output><input id="drift" type="range" min="0" max="1" value="0.34" step="0.01" /></label>
+          </div>
+          <div class="inspector-section seed-row"><div><span class="section-label">SEED</span><strong id="seedValue">731984512</strong></div><button class="outline-button" id="randomize">RANDOMIZE</button></div>
+          <div class="inspector-section saved-section"><div class="saved-head"><span class="section-label">SAVED FIELDS</span><span id="savedCount">0 / 06</span></div><div class="saved-fields" id="savedFields"></div><div class="inspector-actions"><button class="outline-button" id="saveField">SAVE FIELD</button><button class="outline-button" id="exportPng">EXPORT PNG</button></div></div>
+        </aside>
+      </section>
+
+      <footer class="control-bar">
+        <div class="field-readout"><span class="readout-label">FIELD <b id="fieldNumberBottom">014</b></span><span class="mini-spark"></span></div>
+        <div class="waveform" id="waveform" aria-label="Live waveform"></div>
+        <div class="phrase"><span class="readout-label">LIVE PHRASE</span><span id="phraseText">move through the quiet</span></div>
+        <div class="bar-actions"><button class="record-button" id="recordField"><span class="record-dot"></span><span id="recordLabel">RECORD</span></button><button class="new-field" id="newField">BEGIN A NEW FIELD <span aria-hidden="true">→</span></button></div>
+      </footer>
+      <p class="sr-only" id="helpText">Move your pointer through the field. Select an input channel. Allow microphone access to let your voice shape the artwork.</p>
+    </main>
+    <div class="welcome-overlay" id="welcomeOverlay"><div class="welcome-card"><div class="welcome-mark">ECHO / FIELD</div><h2>Give your attention<br/><em>a shape.</em></h2><p>A living instrument for making art from voice, motion, and memory. Move through the field. Nothing repeats exactly.</p><button class="begin-button" id="beginButton">ENTER THE FIELD <span>→</span></button><span class="welcome-note">MICROPHONE ACCESS IS OPTIONAL</span></div></div>
+    <div class="how-overlay" id="howOverlay" hidden><div class="how-card"><button class="close-how" id="closeHow">×</button><span class="section-label">FIELD NOTES</span><h2>Every gesture leaves<br/>a different trace.</h2><div class="how-steps"><div><b>01</b><span>MOVE</span><p>Guide the cursor-orb. Its wake bends the contour lines.</p></div><div><b>02</b><span>LISTEN</span><p>Let the microphone turn the room around you into energy.</p></div><div><b>03</b><span>REMEMBER</span><p>Save a field as a still image, a seed, or a short living recording.</p></div></div><button class="outline-button" id="howDone">RETURN TO THE FIELD</button></div></div>
+    <script src="app.js"></script>
+  </body>
+</html>
