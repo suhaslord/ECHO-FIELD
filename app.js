@@ -17,6 +17,8 @@ const customColorsRow = document.querySelector('#customColorsRow');
 const video = document.querySelector('#webcamVideo');
 const camCanvas = document.querySelector('#webcamCanvas');
 const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
+const handOverlay = document.querySelector('#handOverlay');
+const handOverlayCtx = handOverlay?.getContext('2d');
 
 const phrases = [
   'move through the quiet',
@@ -51,6 +53,10 @@ let micLevel = 0;
 let density = 0.62;
 let drift = 0.34;
 let palette = 'prism';
+let visualStyle = 'flow';
+let intensity = 0.72;
+let lineWeight = 0.8;
+let formScale = 0.72;
 let mediaRecorder = null;
 let recordChunks = [];
 let pointer = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
@@ -61,8 +67,12 @@ let particles = [];
 let audioStream = null;
 let audioCtx = null;
 let videoStream = null;
-let lastCamFrame = null;
-let camMotionEnergy = 0;
+let handTracker = null;
+let handFramePending = false;
+let handConfidence = 0;
+let handLostFrames = 0;
+let visionTarget = { x: 0.5, y: 0.5 };
+let visionLocked = false;
 
 let lastInteractionTime = Date.now();
 let isGhostMode = false;
@@ -100,19 +110,15 @@ function noise(x, y) {
          Math.sin((x + y) * 2.4 + t * 0.08) * 0.4;
 }
 
-function initParticles() {
-  particles = [];
-  const dust = Math.floor(200 + density * 500);
-  for (let i = 0; i < dust; i++) {
-    particles.push({
-      x: Math.random(),
-      y: Math.random(),
-      vx: (Math.random() - 0.5) * 0.002,
-      vy: (Math.random() - 0.5) * 0.002,
-      size: 1 + Math.random() * 2
-    });
-  }
+function clamp01(n) {
+  return Math.max(0, Math.min(1, n));
 }
+
+function easeTowards(current, target, factor) {
+  return current + (target - current) * factor;
+}
+
+
 
 function generatePoetry() {
   const seedHash1 = hash(seed * 1.1);
@@ -206,7 +212,7 @@ function updateSynthSound() {
   const dy = pointer.ty - pointer.y;
   const speed = Math.sqrt(dx * dx + dy * dy);
   
-  let dynamicEnergy = mode === 'voice' ? micLevel * 0.18 : mode === 'vision' ? camMotionEnergy * 0.1 : 0;
+  let dynamicEnergy = mode === 'voice' ? micLevel * 0.18 : mode === 'vision' ? handConfidence * 0.1 : 0;
   const targetVolume = Math.min(0.22, speed * 2.8 + 0.04 + dynamicEnergy);
   synthGain.gain.setTargetAtTime(targetVolume, audioSynthCtx.currentTime, 0.15);
   
@@ -239,7 +245,17 @@ function playChime() {
   } catch (e) {}
 }
 
-function drawField() {
+function initParticles() {
+  const count = Math.floor(200 + density * 500);
+  particles = Array.from({ length: count }, (_, i) => ({
+    x: Math.abs(hash(seed + i * 1.37)),
+    y: Math.abs(hash(seed + i * 2.41)),
+    vx: (hash(seed + i * 3.11) - 0.5) * 0.001,
+    vy: (hash(seed + i * 4.19) - 0.5) * 0.001,
+    size: 0.6 + Math.abs(hash(seed + i * 5.23)) * 1.8
+  }));
+}
+function drawFlowField() {
   // Clear with trails
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = 'rgba(2, 2, 4, 0.22)';
@@ -274,7 +290,7 @@ function drawField() {
       else ctx.lineTo(s, yy);
     }
     ctx.strokeStyle = `hsla(${hue}, 88%, ${hue === 76 || hue === 96 ? '63' : '72'}%, ${0.15 + energy * 0.3})`;
-    ctx.lineWidth = i % 7 === 0 ? 1.5 : 0.6;
+    ctx.lineWidth = lineWeight * (i % 7 === 0 ? 1.5 : 0.6);
     ctx.stroke();
   }
 
@@ -347,12 +363,120 @@ function drawField() {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+
+function clearField() {
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(2, 2, 4, 0.28)';
+  ctx.fillRect(0, 0, width, height);
+}
+
+function drawField() {
+  if (visualStyle === 'orbit') return drawOrbitField();
+  if (visualStyle === 'constellation') return drawConstellationField();
+  if (visualStyle === 'topography') return drawTopographyField();
+  return drawFlowField();
+}
+
+function drawOrbitField() {
+  clearField();
+  const colors = palettes[palette];
+  const cx = pointer.x * width;
+  const cy = pointer.y * height;
+  const radius = Math.min(width, height) * formScale * 0.72;
+  const rings = Math.floor(12 + density * 26);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.translate(cx, cy);
+  for (let ring = 0; ring < rings; ring++) {
+    const ringRadius = radius * (0.12 + ring / rings * 0.9);
+    const points = 90;
+    ctx.beginPath();
+    for (let i = 0; i <= points; i++) {
+      const angle = i / points * Math.PI * 2;
+      const wave = noise(Math.cos(angle) * 1.6 + ring * 0.1, Math.sin(angle) * 1.6 + ring * 0.08);
+      const wobble = wave * radius * 0.018 + Math.sin(angle * 3 + t * (0.6 + energy)) * radius * 0.012;
+      const x = Math.cos(angle) * (ringRadius + wobble) * (1 + pointer.x * 0.12);
+      const y = Math.sin(angle) * (ringRadius + wobble) * (0.72 + pointer.y * 0.18);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${colors[ring % 3]}, 90%, 72%, ${0.12 + intensity * 0.22})`;
+    ctx.lineWidth = lineWeight * (ring % 5 === 0 ? 1.6 : 0.7);
+    ctx.stroke();
+  }
+  const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, radius * 0.52);
+  glow.addColorStop(0, `rgba(255, 245, 255, ${0.32 + intensity * 0.2})`);
+  glow.addColorStop(0.3, 'rgba(157, 123, 255, 0.14)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  ctx.restore();
+}
+
+function drawConstellationField() {
+  clearField();
+  const colors = palettes[palette];
+  const count = Math.min(260, Math.floor(90 + density * 180));
+  const nodes = [];
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < count; i++) {
+    const p = particles[(i * 3) % particles.length];
+    nodes.push({ x: ((p.x + Math.sin(t * 0.15 + i) * 0.012 + 1) % 1) * width, y: ((p.y + Math.cos(t * 0.12 + i * 0.7) * 0.012 + 1) % 1) * height });
+  }
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i];
+    const b = nodes[(i + 1) % nodes.length];
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    if (dx * dx + dy * dy < (Math.min(width, height) * 0.22) ** 2) {
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = `hsla(${colors[i % 3]}, 90%, 72%, ${0.08 + intensity * 0.18})`;
+      ctx.lineWidth = lineWeight * 0.65;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.fillStyle = `hsla(${colors[i % 3]}, 95%, 78%, ${0.26 + intensity * 0.5})`;
+    ctx.arc(a.x, a.y, 0.8 + lineWeight * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawTopographyField() {
+  clearField();
+  const colors = palettes[palette];
+  const cx = pointer.x * width;
+  const cy = pointer.y * height;
+  const maxRadius = Math.hypot(width, height) * formScale;
+  const rings = Math.floor(18 + density * 35);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let ring = 0; ring < rings; ring++) {
+    const baseRadius = maxRadius * (ring + 1) / rings;
+    ctx.beginPath();
+    for (let i = 0; i <= 140; i++) {
+      const angle = i / 140 * Math.PI * 2;
+      const terrain = noise(Math.cos(angle) * 1.8 + ring * 0.14, Math.sin(angle) * 1.8 - ring * 0.1);
+      const r = baseRadius + terrain * 18 * (0.4 + intensity);
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r * 0.62;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${colors[ring % 3]}, 88%, 70%, ${0.1 + intensity * 0.2})`;
+    ctx.lineWidth = lineWeight * (ring % 6 === 0 ? 1.45 : 0.65);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 function animate() {
   t += 0.012;
   
   // Ghost Mode Logic
   const now = Date.now();
-  if (now - lastInteractionTime > 4000 && mode !== 'vision') {
+  const autopilotChecked = document.querySelector('#toggleAutopilot')?.checked ?? true;
+  if (autopilotChecked && now - lastInteractionTime > 4000 && mode !== 'vision') {
     isGhostMode = true;
     ghostT += 0.006;
     pointer.tx = 0.5 + Math.sin(ghostT * 1.3) * 0.35 + Math.sin(ghostT * 2.7) * 0.1;
@@ -366,7 +490,7 @@ function animate() {
   pointer.x += (pointer.tx - pointer.x) * 0.08;
   pointer.y += (pointer.ty - pointer.y) * 0.08;
   
-  let activeEnergy = mode === 'voice' ? micLevel * 0.5 : mode === 'vision' ? camMotionEnergy * 0.8 : 0;
+  let activeEnergy = mode === 'voice' ? micLevel * 0.5 : mode === 'vision' ? handConfidence * 0.28 : 0;
   energy = 0.16 + Math.abs(Math.sin(t * 0.7)) * 0.16 + activeEnergy + drift * 0.12;
   
   drawField();
@@ -374,6 +498,67 @@ function animate() {
   
   cursorOrb.style.left = `${pointer.x * 100}%`;
   cursorOrb.style.top = `${pointer.y * 100}%`;
+
+  // Update HUD Overlay dynamically
+  const hudOverlay = document.querySelector('#hudOverlay');
+  if (hudOverlay) {
+    // Calculate FPS
+    if (!animate.lastTime) animate.lastTime = now;
+    if (!animate.frameCount) animate.frameCount = 0;
+    animate.frameCount++;
+    if (now - animate.lastTime >= 1000) {
+      const fps = Math.round((animate.frameCount * 1000) / (now - animate.lastTime));
+      const fpsEl = document.querySelector('#fpsCounter');
+      if (fpsEl) fpsEl.textContent = `${fps} FPS`;
+      animate.frameCount = 0;
+      animate.lastTime = now;
+    }
+
+    // Tracker Status & Confidence
+    let status = 'IDLE';
+    let confidence = 0;
+    if (mode === 'voice') {
+      status = micLevel > 0.02 ? 'ACTIVE' : 'LISTENING';
+      confidence = Math.min(100, Math.round(micLevel * 350));
+    } else if (mode === 'vision') {
+      status = visionLocked ? 'LOCKED' : handLostFrames > 0 && handLostFrames < 18 ? 'HOLDING' : 'SEARCHING';
+      confidence = Math.min(100, Math.round(handConfidence * 100));
+    } else if (mode === 'motion') {
+      const dx = pointer.tx - pointer.x;
+      const dy = pointer.ty - pointer.y;
+      const speed = Math.sqrt(dx * dx + dy * dy);
+      status = speed > 0.005 ? 'TRACKING' : 'ACTIVE';
+      confidence = Math.min(100, Math.round(60 + speed * 1200));
+    } else if (mode === 'memory') {
+      status = 'STABLE';
+      confidence = Math.round(85 + Math.sin(t * 2) * 5);
+    }
+
+    const statusEl = document.querySelector('#trackerStatus');
+    if (statusEl) {
+      statusEl.textContent = status;
+      // Clear status classes and add current one
+      statusEl.className = 'hud-value';
+      statusEl.classList.add(`status-${status.toLowerCase()}`);
+    }
+
+    const confBar = document.querySelector('#confidenceBarInner');
+    const confVal = document.querySelector('#confidenceVal');
+    if (confBar) confBar.style.width = `${confidence}%`;
+    if (confVal) confVal.textContent = `${confidence}%`;
+  }
+
+  // Update Target Lock Reticle position & visibility
+  const targetLock = document.querySelector('#targetLock');
+  if (targetLock) {
+    const isVision = mode === 'vision';
+    const isTracking = isVision && visionLocked;
+    targetLock.classList.toggle('active', isTracking);
+    if (isTracking) {
+      targetLock.style.left = `${pointer.x * 100}%`;
+      targetLock.style.top = `${pointer.y * 100}%`;
+    }
+  }
 
   // Animate Waveform
   if (waveSpans.length) {
@@ -383,8 +568,8 @@ function animate() {
       if (mode === 'voice' && micLevel > 0.01) {
         h = 8 + (micLevel * 45) * (0.3 + 0.7 * Math.sin(t * 6 + i * 0.3));
         waveSpans[i].style.backgroundColor = `hsla(${waveColors[i % 3]}, 88%, 70%, 0.9)`;
-      } else if (mode === 'vision' && camMotionEnergy > 0.01) {
-        h = 8 + (camMotionEnergy * 60) * (0.3 + 0.7 * Math.sin(t * 8 + i * 0.4));
+      } else if (mode === 'vision' && handConfidence > 0.01) {
+        h = 8 + (handConfidence * 60) * (0.3 + 0.7 * Math.sin(t * 8 + i * 0.4));
         waveSpans[i].style.backgroundColor = `hsla(${waveColors[(i+1) % 3]}, 88%, 70%, 0.8)`;
       } else {
         const speed = mode === 'motion' ? 2.5 : 1.2;
@@ -427,7 +612,7 @@ function setMode(next) {
     b.setAttribute('aria-pressed', on);
   });
   
-  statusText.textContent = next === 'voice' ? 'LISTENING' : next === 'vision' ? 'WATCHING' : next === 'motion' ? 'TRACKING' : 'REMEMBERING';
+  statusText.textContent = next === 'voice' ? 'LISTENING' : next === 'vision' ? 'HAND TRACKING' : next === 'motion' ? 'TRACKING' : 'REMEMBERING';
   generatePoetry();
   
   if (next === 'voice') {
@@ -487,52 +672,107 @@ async function startVision() {
   if (videoStream) return;
   if (!navigator.mediaDevices?.getUserMedia) return;
   try {
-    videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 64, height: 64 } });
+    if (!window.Hands) throw new Error('Hand tracking model did not load');
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      audio: false
+    });
     video.srcObject = videoStream;
-    camCanvas.width = 64;
-    camCanvas.height = 64;
-    
-    const tick = () => {
-      if (!videoStream) return;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        camCtx.drawImage(video, 0, 0, 64, 64);
-        const frame = camCtx.getImageData(0, 0, 64, 64).data;
-        if (lastCamFrame) {
-          let diff = 0;
-          let sumX = 0, sumY = 0, count = 0;
-          for (let i = 0; i < frame.length; i += 4) {
-            const rDiff = Math.abs(frame[i] - lastCamFrame[i]);
-            if (rDiff > 20) { // motion threshold
-              diff += rDiff;
-              const px = (i / 4) % 64;
-              const py = Math.floor((i / 4) / 64);
-              sumX += px;
-              sumY += py;
-              count++;
-            }
-          }
-          camMotionEnergy = diff / (frame.length * 255) * 15; // normalize
-          
-          if (count > 8) {
-            // Track motion center of mass and map to pointer (mirrored)
-            const centerX = sumX / count;
-            const centerY = sumY / count;
-            pointer.tx = 1.0 - (centerX / 64); 
-            pointer.ty = centerY / 64;
-            lastInteractionTime = Date.now(); // Keep ghost mode away
-            document.querySelector('#canvasHint').style.opacity = 0;
-          }
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    const previewLabel = document.querySelector('#trackingPreviewLabel');
+    const preview = document.querySelector('#trackingPreview');
+
+    handTracker = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}` });
+    handTracker.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.72, minTrackingConfidence: 0.68 });
+    handTracker.onResults(results => {
+      drawHandResults(results);
+      const landmarks = results.multiHandLandmarks?.[0];
+      if (!landmarks) {
+        handLostFrames++;
+        handConfidence = easeTowards(handConfidence, 0, 0.12);
+        if (visionLocked && handLostFrames < 18) {
+          if (previewLabel) previewLabel.textContent = 'HOLDING';
+        } else {
+          visionLocked = false;
+          if (previewLabel) previewLabel.textContent = 'SEARCHING';
+          if (preview) preview.classList.remove('active');
         }
-        lastCamFrame = new Uint8ClampedArray(frame);
+        return;
+      }
+
+      const wrist = landmarks[0];
+      const indexMcp = landmarks[5];
+      const indexTip = landmarks[8];
+      const palmX = (wrist.x + indexMcp.x + landmarks[9].x) / 3;
+      const palmY = (wrist.y + indexMcp.y + landmarks[9].y) / 3;
+      const targetX = 1 - clamp01(indexTip.x * 0.72 + palmX * 0.28);
+      const targetY = clamp01(indexTip.y * 0.72 + palmY * 0.28);
+      visionTarget.x = easeTowards(visionTarget.x, targetX, 0.28);
+      visionTarget.y = easeTowards(visionTarget.y, targetY, 0.28);
+      pointer.tx = visionTarget.x;
+      pointer.ty = visionTarget.y;
+      handConfidence = easeTowards(handConfidence, 1, 0.2);
+      handLostFrames = 0;
+      visionLocked = true;
+      lastInteractionTime = Date.now();
+      if (preview) preview.classList.add('active');
+      if (previewLabel) previewLabel.textContent = 'LOCKED';
+      const hint = document.querySelector('#canvasHint');
+      if (hint) hint.style.opacity = 0;
+    });
+
+    await video.play();
+    const tick = async () => {
+      if (!videoStream) return;
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !handFramePending) {
+        handFramePending = true;
+        try { await handTracker.send({ image: video }); } catch (err) { console.warn('Hand frame failed', err); }
+        handFramePending = false;
       }
       requestAnimationFrame(tick);
     };
     tick();
   } catch (err) {
-    console.warn("Camera access failed", err);
-    statusText.textContent = 'MOTION READY';
+    console.warn('Camera access failed', err);
+    statusText.textContent = 'VISION UNAVAILABLE';
+    const previewLabel = document.querySelector('#trackingPreviewLabel');
+    if (previewLabel) previewLabel.textContent = 'MODEL OFFLINE';
     videoStream = null;
   }
+}
+
+function drawHandResults(results) {
+  if (!handOverlay || !handOverlayCtx || !video.videoWidth) return;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (handOverlay.width !== w || handOverlay.height !== h) {
+    handOverlay.width = w;
+    handOverlay.height = h;
+  }
+  handOverlayCtx.clearRect(0, 0, w, h);
+  const landmarks = results.multiHandLandmarks?.[0];
+  if (!landmarks) return;
+  handOverlayCtx.save();
+  handOverlayCtx.translate(w, 0);
+  handOverlayCtx.scale(-1, 1);
+  const connections = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
+  handOverlayCtx.strokeStyle = 'rgba(171, 255, 215, 0.9)';
+  handOverlayCtx.lineWidth = Math.max(2, w / 180);
+  connections.forEach(([a, b]) => {
+    handOverlayCtx.beginPath();
+    handOverlayCtx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
+    handOverlayCtx.lineTo(landmarks[b].x * w, landmarks[b].y * h);
+    handOverlayCtx.stroke();
+  });
+  landmarks.forEach((point, index) => {
+    handOverlayCtx.beginPath();
+    handOverlayCtx.fillStyle = index === 8 ? '#fff4b0' : '#a9ffd4';
+    handOverlayCtx.arc(point.x * w, point.y * h, index === 8 ? w / 38 : w / 70, 0, Math.PI * 2);
+    handOverlayCtx.fill();
+  });
+  handOverlayCtx.restore();
 }
 
 function stopVision() {
@@ -540,10 +780,18 @@ function stopVision() {
     videoStream.getTracks().forEach(track => track.stop());
     videoStream = null;
   }
-  camMotionEnergy = 0;
-  lastCamFrame = null;
+  if (handTracker?.close) handTracker.close();
+  handTracker = null;
+  handFramePending = false;
+  handConfidence = 0;
+  handLostFrames = 0;
+  visionLocked = false;
+  if (handOverlayCtx && handOverlay) handOverlayCtx.clearRect(0, 0, handOverlay.width, handOverlay.height);
+  const preview = document.querySelector('#trackingPreview');
+  const previewLabel = document.querySelector('#trackingPreviewLabel');
+  if (preview) preview.classList.remove('active');
+  if (previewLabel) previewLabel.textContent = 'SEARCHING';
 }
-
 function setFieldNumber() {
   const n = String(Math.floor(seed % 1000)).padStart(3, '0');
   document.querySelector('#fieldNumber').textContent = document.querySelector('#fieldNumberBottom').textContent = n;
@@ -592,6 +840,10 @@ function renderSaved() {
     img.addEventListener('click', () => {
       seed = item.seed;
       palette = item.palette;
+      visualStyle = item.visualStyle || 'flow';
+      intensity = item.intensity ?? 0.72;
+      lineWeight = item.lineWeight ?? 0.8;
+      formScale = item.formScale ?? 0.72;
       density = item.density;
       drift = item.drift;
       setFieldNumber();
@@ -599,6 +851,13 @@ function renderSaved() {
       document.querySelector('#drift').value = drift;
       document.querySelector('#densityValue').textContent = density.toFixed(2);
       document.querySelector('#driftValue').textContent = drift.toFixed(2);
+      document.querySelector('#intensity').value = intensity;
+      document.querySelector('#lineWeight').value = lineWeight;
+      document.querySelector('#formScale').value = formScale;
+      document.querySelector('#intensityValue').textContent = intensity.toFixed(2);
+      document.querySelector('#lineWeightValue').textContent = lineWeight.toFixed(2);
+      document.querySelector('#formScaleValue').textContent = formScale.toFixed(2);
+      document.querySelectorAll('.form-choice').forEach(x => x.classList.toggle('selected', x.dataset.style === visualStyle));
       
       document.querySelectorAll('.palette-choice').forEach(x => {
         const selected = x.dataset.palette === palette;
@@ -622,6 +881,10 @@ function saveField() {
     image: canvas.toDataURL('image/jpeg', 0.72),
     seed,
     palette,
+    visualStyle,
+    intensity,
+    lineWeight,
+    formScale,
     density,
     drift
   });
@@ -715,6 +978,24 @@ document.querySelector('#saveField').addEventListener('click', saveField);
 document.querySelector('#exportPng').addEventListener('click', exportPng);
 document.querySelector('#recordField').addEventListener('click', toggleRecorder);
 
+
+document.querySelectorAll('.form-choice').forEach(button => {
+  button.addEventListener('click', () => {
+    visualStyle = button.dataset.style;
+    document.querySelectorAll('.form-choice').forEach(item => item.classList.toggle('selected', item === button));
+    statusText.textContent = `${button.dataset.style.toUpperCase()} FORM`;
+    lastInteractionTime = Date.now();
+  });
+});
+
+[['intensity', 'intensityValue', value => intensity = value], ['lineWeight', 'lineWeightValue', value => lineWeight = value], ['formScale', 'formScaleValue', value => formScale = value]].forEach(([id, outputId, setValue]) => {
+  document.querySelector(`#${id}`)?.addEventListener('input', event => {
+    const value = Number(event.target.value);
+    setValue(value);
+    document.querySelector(`#${outputId}`).textContent = value.toFixed(2);
+    lastInteractionTime = Date.now();
+  });
+});
 document.querySelector('#density').addEventListener('input', e => {
   density = Number(e.target.value);
   document.querySelector('#densityValue').textContent = density.toFixed(2);
@@ -808,3 +1089,5 @@ renderSaved();
 setFieldNumber();
 resize();
 animate();
+
+

@@ -44,9 +44,9 @@
           </button>
           <div class="rail-marker">04</div>
           <button class="input-module" data-mode="vision" aria-pressed="false">
-            <span class="module-title">VISION</span>
+            <span class="module-title">HAND</span>
             <span class="vision-glyph" aria-hidden="true">⊙</span>
-            <span class="module-code">&lt; cam.track &gt;</span>
+            <span class="module-code">&lt; hand.track &gt;</span>
           </button>
         </aside>
         <div class="canvas-wrap">
@@ -54,11 +54,81 @@
           <div class="canvas-cursor" id="cursorOrb"></div>
           <div class="field-label">FIELD <span id="fieldNumber">014</span></div>
           <div class="canvas-hint" id="canvasHint">move through the field</div>
-          <video id="webcamVideo" autoplay playsinline style="display:none;"></video>
+          <div class="tracking-preview" id="trackingPreview" aria-label="Live tracking preview">
+            <div class="tracking-preview-head">
+              <span>HAND TRACKING</span>
+              <span id="trackingPreviewLabel">SEARCHING</span>
+            </div>
+            <div class="tracking-preview-stage">
+              <video id="webcamVideo" autoplay muted playsinline></video>
+              <canvas id="handOverlay" aria-hidden="true"></canvas>
+            </div>
+          </div>
           <canvas id="webcamCanvas" style="display:none;"></canvas>
+          
+          <!-- Premium HUD Overlay -->
+          <div class="hud-overlay" id="hudOverlay">
+            <div class="hud-item tracking-status-wrap">
+              <span class="hud-label">TRACKER STATUS</span>
+              <span id="trackerStatus" class="hud-value status-searching">SEARCHING</span>
+            </div>
+            <div class="hud-item confidence-wrap">
+              <span class="hud-label">CONFIDENCE</span>
+              <div class="confidence-bar-outer">
+                <div id="confidenceBarInner" class="confidence-bar-inner" style="width: 0%"></div>
+              </div>
+              <span id="confidenceVal" class="hud-value">0%</span>
+            </div>
+            <div class="hud-item fps-wrap">
+              <span class="hud-label">ENGINE SPEED</span>
+              <span id="fpsCounter" class="hud-value">60 FPS</span>
+            </div>
+          </div>
+
+          <!-- Target Lock Reticle -->
+          <div class="target-lock-reticle" id="targetLock">
+            <svg viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="16" class="reticle-circle" />
+              <line x1="20" y1="2" x2="20" y2="8" />
+              <line x1="20" y1="32" x2="20" y2="38" />
+              <line x1="2" y1="20" x2="8" y2="20" />
+              <line x1="32" y1="20" x2="38" y2="20" />
+              <rect x="18" y="18" width="4" height="4" class="reticle-center" />
+            </svg>
+            <span class="lock-label">LOCKED</span>
+          </div>
         </div>
         <aside class="inspector" id="inspector" aria-label="Field inspector">
           <div class="inspector-head"><span>INSPECTOR</span><button class="close-inspector" id="closeInspector" aria-label="Close inspector">×</button></div>
+          
+          <div class="inspector-section settings-section">
+            <span class="section-label">TRACKING & ENGINE Settings</span>
+            <div class="settings-grid">
+              <label class="setting-row">
+                <span>SMOOTHING (EMA)</span>
+                <input id="trackingSmoothing" type="range" min="0.01" max="0.5" value="0.08" step="0.01" />
+              </label>
+              <label class="setting-row">
+                <span>MOTION THRESHOLD</span>
+                <input id="motionThreshold" type="range" min="5" max="50" value="18" step="1" />
+              </label>
+              <div class="checkbox-row">
+                <label class="custom-toggle">
+                  <input type="checkbox" id="toggleHud" checked />
+                  <span class="toggle-slider"></span>
+                  <span>SHOW HUD OVERLAY</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="custom-toggle">
+                  <input type="checkbox" id="toggleAutopilot" checked />
+                  <span class="toggle-slider"></span>
+                  <span>AUTO-GHOST MODE</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <div class="inspector-section palette-section">
             <span class="section-label">PALETTE</span>
             <div class="palette-options">
@@ -77,6 +147,21 @@
             <label>DENSITY <output id="densityValue">0.62</output><input id="density" type="range" min="0.2" max="1" value="0.62" step="0.01" /></label>
             <label>DRIFT <output id="driftValue">0.34</output><input id="drift" type="range" min="0" max="1" value="0.34" step="0.01" /></label>
           </div>
+          <div class="inspector-section form-section">
+            <span class="section-label">FIELD FORM</span>
+            <div class="field-form-options" role="group" aria-label="Field form">
+              <button class="form-choice selected" data-style="flow"><span class="form-icon form-icon-flow"></span><span>FLOW</span></button>
+              <button class="form-choice" data-style="orbit"><span class="form-icon form-icon-orbit"></span><span>ORBIT</span></button>
+              <button class="form-choice" data-style="constellation"><span class="form-icon form-icon-stars"></span><span>STARS</span></button>
+              <button class="form-choice" data-style="topography"><span class="form-icon form-icon-topo"></span><span>TOPO</span></button>
+            </div>
+          </div>
+          <div class="inspector-section style-sliders">
+            <label>INTENSITY <output id="intensityValue">0.72</output><input id="intensity" type="range" min="0.2" max="1" value="0.72" step="0.01" /></label>
+            <label>LINE WEIGHT <output id="lineWeightValue">0.80</output><input id="lineWeight" type="range" min="0.2" max="1.8" value="0.8" step="0.05" /></label>
+            <label>FORM SCALE <output id="formScaleValue">0.72</output><input id="formScale" type="range" min="0.35" max="1.2" value="0.72" step="0.01" /></label>
+          </div>
+
           <div class="inspector-section seed-row"><div><span class="section-label">SEED</span><strong id="seedValue">731984512</strong></div><button class="outline-button" id="randomize">RANDOMIZE</button></div>
           <div class="inspector-section saved-section"><div class="saved-head"><span class="section-label">SAVED FIELDS</span><span id="savedCount">0 / 06</span></div><div class="saved-fields" id="savedFields"></div><div class="inspector-actions"><button class="outline-button" id="saveField">SAVE FIELD</button><button class="outline-button" id="exportPng">EXPORT PNG</button></div></div>
         </aside>
@@ -88,10 +173,12 @@
         <div class="phrase"><span class="readout-label">LIVE PHRASE</span><span id="phraseText">move through the quiet</span></div>
         <div class="bar-actions"><button class="record-button" id="recordField"><span class="record-dot"></span><span id="recordLabel">RECORD</span></button><button class="new-field" id="newField">BEGIN A NEW FIELD <span aria-hidden="true">→</span></button></div>
       </footer>
-      <p class="sr-only" id="helpText">Move your pointer through the field. Select an input channel. Allow microphone access to let your voice shape the artwork.</p>
+      <p class="sr-only" id="helpText">Move your pointer through the field. Select an input channel. Allow microphone access to let your voice shape the artwork. Vision mode uses the webcam preview and tracks your hand landmarks with smoothing.</p>
     </main>
     <div class="welcome-overlay" id="welcomeOverlay"><div class="welcome-card"><div class="welcome-mark">ECHO / FIELD</div><h2>Give your attention<br/><em>a shape.</em></h2><p>A living instrument for making art from voice, motion, and memory. Move through the field. Nothing repeats exactly.</p><button class="begin-button" id="beginButton">ENTER THE FIELD <span>→</span></button><span class="welcome-note">MICROPHONE ACCESS IS OPTIONAL</span></div></div>
-    <div class="how-overlay" id="howOverlay" hidden><div class="how-card"><button class="close-how" id="closeHow">×</button><span class="section-label">FIELD NOTES</span><h2>Every gesture leaves<br/>a different trace.</h2><div class="how-steps"><div><b>01</b><span>MOVE</span><p>Guide the cursor-orb. Its wake bends the contour lines.</p></div><div><b>02</b><span>LISTEN</span><p>Let the microphone turn the room around you into energy.</p></div><div><b>03</b><span>REMEMBER</span><p>Save a field as a still image, a seed, or a short living recording.</p></div></div><button class="outline-button" id="howDone">RETURN TO THE FIELD</button></div></div>
+    <div class="how-overlay" id="howOverlay" hidden><div class="how-card"><button class="close-how" id="closeHow">×</button><span class="section-label">FIELD NOTES</span><h2>Every gesture leaves<br/>a different trace.</h2><div class="how-steps"><div><b>01</b><span>MOVE</span><p>Guide the cursor-orb. Its wake bends the contour lines.</p></div><div><b>02</b><span>LISTEN</span><p>Let the microphone turn the room around you into energy.</p></div><div><b>03</b><span>HAND</span><p>Hand mode uses the small preview window to show the detected hand skeleton and target point.</p></div></div><button class="outline-button" id="howDone">RETURN TO THE FIELD</button></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
     <script src="app.js"></script>
   </body>
 </html>
+
