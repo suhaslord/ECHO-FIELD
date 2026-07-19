@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050505" />
+    <title>ECHO / FIELD</title>
+    <meta name="description" content="A living visual instrument where voice, motion, and memory shape a generative field." />
+    <meta property="og:title" content="ECHO / FIELD — Your presence becomes the instrument" />
+    <meta property="og:description" content="Enter a living artwork shaped by sound, gesture, and programmable memory." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="assets/echo-field-social.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-brand" href="#top">ECHO / FIELD</a>
+      <div class="site-links">
+        <a href="#makers">ABOUT US</a>
+        <a href="#story">ABOUT PROJECT</a>
+        <a class="nav-enter" href="#experience">ENTER PROJECT <span>↘</span></a>
+      </div>
+    </nav>
+
+    <div class="ambient-light ambient-light-a" aria-hidden="true"></div>
+    <div class="ambient-light ambient-light-b" aria-hidden="true"></div>
+
+    <main class="site-main" id="top">
+      <section class="landing-hero" aria-labelledby="heroTitle">
+        <canvas class="hero-particles" id="heroParticles" aria-hidden="true"></canvas>
+        <div class="hero-copy reveal is-visible">
+          <span class="eyebrow"><i></i> INTERACTIVE SOUND ART / 2026</span>
+          <h1 id="heroTitle">Your presence<br/>becomes the <em>instrument.</em></h1>
+          <p>A living visual field shaped by voice, gesture, and programmable memory. Nothing repeats exactly—because you never do.</p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#experience">ENTER PROJECT <span>↓</span></a>
+            <a class="quiet-link" href="#story">DISCOVER THE STORY</a>
+          </div>
+        </div>
+        <div class="sound-sculpture" id="soundSculpture" aria-label="Rotating sound field sculpture">
+          <div class="sculpture-halo halo-a"></div>
+          <div class="sculpture-halo halo-b"></div>
+          <div class="sculpture-halo halo-c"></div>
+          <div class="sculpture-core"><span>E/F</span></div>
+          <div class="orbit-note note-a">VOICE</div>
+          <div class="orbit-note note-b">MOTION</div>
+          <div class="orbit-note note-c">MEMORY</div>
+        </div>
+        <div class="hero-index"><span>SCROLL TO COMPOSE</span><b>01 / 04</b></div>
+      </section>
+
+      <section class="makers-section scroll-scene" id="makers" data-scene="makers">
+        <canvas class="section-particles" aria-hidden="true"></canvas>
+        <div class="section-kicker reveal">01 / ABOUT US</div>
+        <div class="makers-heading reveal">
+          <h2>Two perspectives.<br/><em>One responsive world.</em></h2>
+          <p>ECHO / FIELD was created by two collaborators exploring the point where computation stops being a tool and starts becoming a medium.</p>
+        </div>
+        <div class="maker-grid">
+          <article class="maker-card reveal">
+            <span class="maker-number">A / 01</span>
+            <div class="maker-monogram">TM</div>
+            <h3>Tapasvi</h3>
+            <p>Tapasvi shaped the creative direction, interaction language, and visual system—turning abstract ideas about attention into an experience people can feel and play.</p>
+            <span class="maker-role">ART DIRECTION · EXPERIENCE · CONCEPT</span>
+          </article>
+          <article class="maker-card reveal">
+            <span class="maker-number">A / 02</span>
+            <div class="maker-monogram">SS</div>
+            <h3>Suhas</h3>
+            <p>Co-built the technology behind the field, translating live input into expressive motion and helping the instrument behave with intention rather than randomness.</p>
+            <span class="maker-role">CREATIVE CODE · SYSTEMS · SOUND</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="story-section scroll-scene" id="story" data-scene="story">
+        <div class="story-hero reveal-scale reveal">
+          <span class="section-kicker reveal">02 / ABOUT THE PROJECT</span>
+          <h2 class="reveal">Not an image.<br/>A <em>relationship.</em></h2>
+          <p class="story-hero__sub reveal">Five layers of thinking behind a living instrument.</p>
+          <div class="story-meter" aria-hidden="true"><i id="storyProgress"></i></div>
+        </div>
+
+        <div class="story-timeline" id="storyTimeline">
+          <div class="story-timeline__line" aria-hidden="true">
+            <div class="story-timeline__fill" id="storyTimelineFill"></div>
+          </div>
+
+          <article class="story-card reveal-left reveal" data-delay="0" data-symbol="01">
+            <div class="story-card__number" aria-hidden="true">01</div>
+            <div class="story-card__content">
+              <span class="story-card__badge">INSPIRATION</span>
+              <h3>Art that notices you back.</h3>
+              <p>Most digital art is something we only look at. We wanted to create an artwork that responds to the person experiencing it. Every interaction produces a different composition, so the work only exists while someone is using it.</p>
+            </div>
+          </article>
+
+          <article class="story-card story-card--right reveal-right reveal" data-delay="1" data-symbol="02">
+            <div class="story-card__number" aria-hidden="true">02</div>
+            <div class="story-card__content">
+              <span class="story-card__badge">WHAT IT DOES</span>
+              <h3>Voice, motion, and memory become material.</h3>
+              <p>Move through the field, switch input modes, shape palette, density and drift, randomize a seed, save fields, export stills, and record the artwork evolving. Microphone strength changes its energy; hand direction changes its sound.</p>
+            </div>
+          </article>
+
+          <article class="story-card reveal-left reveal" data-delay="2" data-symbol="03">
+            <div class="story-card__number" aria-hidden="true">03</div>
+            <div class="story-card__content">
+              <span class="story-card__badge">HOW WE BUILT IT</span>
+              <h3>A browser becomes a studio.</h3>
+              <p>HTML Canvas and JavaScript render every contour live. The Web Audio API translates sound into energy, hand tracking maps gesture to the field, seeded systems create distinct worlds, and local storage preserves the traces you choose to keep.</p>
+            </div>
+          </article>
+
+          <article class="story-card story-card--right reveal-right reveal" data-delay="3" data-symbol="04">
+            <div class="story-card__number" aria-hidden="true">04</div>
+            <div class="story-card__content">
+              <span class="story-card__badge">CHALLENGE</span>
+              <h3>Making algorithms feel intentional.</h3>
+              <p>We limited the visual language to flowing contours, particles, glow, and one cursor-orb. Every visible control teaches the visitor how their behavior changes the piece, keeping complexity expressive rather than arbitrary.</p>
+            </div>
+          </article>
+
+          <article class="story-card reveal-left reveal" data-delay="4" data-symbol="05">
+            <div class="story-card__number" aria-hidden="true">05</div>
+            <div class="story-card__content">
+              <span class="story-card__badge">WHAT WE LEARNED</span>
+              <h3>Technology can be the medium itself.</h3>
+              <p>The interaction, algorithm, sound, and visitor all contribute to the final artwork. ECHO / FIELD could not exist as a traditional painting or static image—it must be generated in real time from human presence.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="experience-intro" id="experience">
+        <span class="section-kicker reveal">03 / THE INSTRUMENT</span>
+        <h2 class="reveal">Now make the field<br/><em>your own.</em></h2>
+        <p class="reveal">Turn sound on. Choose MIC for audio-reactive energy or HAND to conduct pitch and brightness with movement.</p>
+      </section>
+
+      <section class="app-shell reveal" id="appShell">
+      <header class="topbar">
+        <h1>ECHO / FIELD</h1>
+        <div class="top-actions">
+          <button class="text-button" id="howItWorks">HOW IT WORKS</button>
+          <button class="text-button" id="toggleInspector">INSPECTOR</button>
+          <button class="text-button" id="toggleSound">SOUND: OFF</button>
+          <div class="live-state"><span class="live-dot"></span><span id="statusText">IDLE</span></div>
+        </div>
+      </header>
+
+      <section class="instrument" aria-label="Echo Field instrument">
+        <aside class="input-rail">
+          <div class="rail-marker">01</div>
+          <button class="input-module active" data-mode="voice" aria-pressed="true">
+            <span class="module-title">VOICE</span>
+            <span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="module-code">&lt; mic.input &gt;</span>
+          </button>
+          <div class="rail-marker">02</div>
+          <button class="input-module" data-mode="motion" aria-pressed="false">
+            <span class="module-title">MOTION</span>
+            <span class="motion-glyph" aria-hidden="true">∞</span>
+            <span class="module-code">&lt; cursor.track &gt;</span>
+          </button>
+          <div class="rail-marker">03</div>
+          <button class="input-module" data-mode="memory" aria-pressed="false">
+            <span class="module-title">MEMORY</span>
+            <span class="memory-grid" aria-hidden="true"></span>
+            <span class="module-code">&lt; field.state &gt;</span>
+          </button>
+          <div class="rail-marker">04</div>
+          <button class="input-module" data-mode="vision" aria-pressed="false">
+            <span class="module-title">HAND</span>
+            <span class="vision-glyph" aria-hidden="true">⊙</span>
+            <span class="module-code">&lt; hand.track &gt;</span>
+          </button>
+        </aside>
+        <div class="canvas-wrap">
+          <canvas id="fieldCanvas" aria-label="A generative visual field responding to sound and movement"></canvas>
+          <div class="canvas-cursor" id="cursorOrb"></div>
+          <div class="field-label">FIELD <span id="fieldNumber">014</span></div>
+          <div class="canvas-hint" id="canvasHint">move through the field</div>
+
+          <canvas id="webcamCanvas" style="display:none;"></canvas>
+          
+          <!-- Premium HUD Overlay -->
+          <div class="hud-overlay" id="hudOverlay">
+            <div class="hud-item tracking-status-wrap">
+              <span class="hud-label">TRACKER STATUS</span>
+              <span id="trackerStatus" class="hud-value status-searching">SEARCHING</span>
+            </div>
+            <div class="hud-item confidence-wrap">
+              <span class="hud-label">CONFIDENCE</span>
+              <div class="confidence-bar-outer">
+                <div id="confidenceBarInner" class="confidence-bar-inner" style="width: 0%"></div>
+              </div>
+              <span id="confidenceVal" class="hud-value">0%</span>
+            </div>
+            <div class="hud-item fps-wrap">
+              <span class="hud-label">ENGINE SPEED</span>
+              <span id="fpsCounter" class="hud-value">60 FPS</span>
+            </div>
+            <div class="hud-item input-wrap">
+              <span class="hud-label">INPUT ENERGY</span>
+              <span id="inputReadout" class="hud-value">00%</span>
+            </div>
+          </div>
+
+          <!-- Target Lock Reticle -->
+          <div class="target-lock-reticle" id="targetLock">
+            <svg viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="16" class="reticle-circle" />
+              <line x1="20" y1="2" x2="20" y2="8" />
+              <line x1="20" y1="32" x2="20" y2="38" />
+              <line x1="2" y1="20" x2="8" y2="20" />
+              <line x1="32" y1="20" x2="38" y2="20" />
+              <rect x="18" y="18" width="4" height="4" class="reticle-center" />
+            </svg>
+            <span class="lock-label">LOCKED</span>
+          </div>
+        </div>
+        <aside class="inspector" id="inspector" aria-label="Field inspector">
+          <div class="inspector-head"><span>INSPECTOR</span><button class="close-inspector" id="closeInspector" aria-label="Close inspector">×</button></div>
+          
+          <div class="inspector-section tracking-preview-section">
+            <div class="tracking-preview" id="trackingPreview" aria-label="Live tracking preview">
+              <div class="tracking-preview-head">
+                <span>HAND TRACKING</span>
+                <span id="trackingPreviewLabel">SEARCHING</span>
+              </div>
+              <div class="tracking-preview-stage">
+                <video id="webcamVideo" autoplay muted playsinline></video>
+                <canvas id="handOverlay" aria-hidden="true"></canvas>
+              </div>
+            </div>
+          </div>
+          
+          <div class="inspector-section settings-section">
+            <span class="section-label">TRACKING & ENGINE Settings</span>
+            <div class="settings-grid">
+              <label class="setting-row">
+                <span>SMOOTHING (EMA)</span>
+                <input id="trackingSmoothing" type="range" min="0.01" max="0.5" value="0.08" step="0.01" />
+              </label>
+              <label class="setting-row">
+                <span>MOTION THRESHOLD</span>
+                <input id="motionThreshold" type="range" min="5" max="50" value="18" step="1" />
+              </label>
+              <div class="checkbox-row">
+                <label class="custom-toggle">
+                  <input type="checkbox" id="toggleHud" checked />
+                  <span class="toggle-slider"></span>
+                  <span>SHOW HUD OVERLAY</span>
+                </label>
+              </div>
+              <div class="checkbox-row">
+                <label class="custom-toggle">
+                  <input type="checkbox" id="toggleAutopilot" checked />
+                  <span class="toggle-slider"></span>
+                  <span>AUTO-GHOST MODE</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="inspector-section palette-section">
+            <span class="section-label">PALETTE</span>
+            <div class="palette-options">
+              <button class="palette-choice selected" data-palette="prism"><span class="swatch prism"></span><span>PRESSURE</span></button>
+              <button class="palette-choice" data-palette="violet"><span class="swatch violet"></span><span>PEAK</span></button>
+              <button class="palette-choice" data-palette="lime"><span class="swatch lime"></span><span>AMBIENT</span></button>
+              <button class="palette-choice" data-palette="custom" id="customPaletteChoice"><span class="swatch custom" id="customSwatch"></span><span>CUSTOM</span></button>
+            </div>
+            <div class="custom-colors-row" id="customColorsRow" style="display: none; margin-top: 14px; gap: 8px; justify-content: space-between;">
+              <input type="color" id="customColor1" value="#00e5ff" title="Color 1" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+              <input type="color" id="customColor2" value="#ff9500" title="Color 2" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+              <input type="color" id="customColor3" value="#ff2d55" title="Color 3" style="flex:1; height:24px; border:1px solid rgba(255,255,255,0.15); background:none; cursor:pointer;" />
+            </div>
+          </div>
+          <div class="inspector-section sliders">
+            <label>DENSITY <output id="densityValue">0.62</output><input id="density" type="range" min="0.2" max="1" value="0.62" step="0.01" /></label>
+            <label>DRIFT <output id="driftValue">0.34</output><input id="drift" type="range" min="0" max="1" value="0.34" step="0.01" /></label>
+          </div>
+          <div class="inspector-section form-section">
+            <span class="section-label">FIELD FORM</span>
+            <div class="field-form-options" role="group" aria-label="Field form">
+              <button class="form-choice selected" data-style="flow"><span class="form-icon form-icon-flow"></span><span>FLOW</span></button>
+              <button class="form-choice" data-style="orbit"><span class="form-icon form-icon-orbit"></span><span>ORBIT</span></button>
+              <button class="form-choice" data-style="constellation"><span class="form-icon form-icon-stars"></span><span>STARS</span></button>
+              <button class="form-choice" data-style="topography"><span class="form-icon form-icon-topo"></span><span>TOPO</span></button>
+            </div>
+          </div>
+          <div class="inspector-section style-sliders">
+            <label>INTENSITY <output id="intensityValue">0.72</output><input id="intensity" type="range" min="0.2" max="1" value="0.72" step="0.01" /></label>
+            <label>LINE WEIGHT <output id="lineWeightValue">0.80</output><input id="lineWeight" type="range" min="0.2" max="1.8" value="0.8" step="0.05" /></label>
+            <label>FORM SCALE <output id="formScaleValue">0.72</output><input id="formScale" type="range" min="0.35" max="1.2" value="0.72" step="0.01" /></label>
+          </div>
+
+          <div class="inspector-section seed-row"><div><span class="section-label">SEED</span><strong id="seedValue">731984512</strong></div><button class="outline-button" id="randomize">RANDOMIZE</button></div>
+          <div class="inspector-section saved-section"><div class="saved-head"><span class="section-label">SAVED FIELDS</span><span id="savedCount">0 / 06</span></div><div class="saved-fields" id="savedFields"></div><div class="inspector-actions"><button class="outline-button" id="saveField">SAVE FIELD</button><button class="outline-button" id="exportPng">EXPORT PNG</button></div></div>
+        </aside>
+      </section>
+
+      <footer class="control-bar">
+        <div class="field-readout"><span class="readout-label">FIELD <b id="fieldNumberBottom">014</b></span><span class="mini-spark"></span></div>
+        <div class="waveform" id="waveform" aria-label="Live waveform"></div>
+        <div class="phrase"><span class="readout-label">LIVE PHRASE</span><span id="phraseText">move through the quiet</span><span class="gesture-guide" id="gestureGuide">MIC LEVEL → VOLUME + BLOOM</span></div>
+        <div class="bar-actions"><button class="record-button" id="recordField"><span class="record-dot"></span><span id="recordLabel">RECORD</span></button><button class="new-field" id="newField">BEGIN A NEW FIELD <span aria-hidden="true">→</span></button></div>
+      </footer>
+      <p class="sr-only" id="helpText">Move your pointer through the field. Select an input channel. Allow microphone access to let your voice shape the artwork. Vision mode uses the webcam preview and tracks your hand landmarks with smoothing.</p>
+      </section>
+
+      <footer class="site-footer">
+        <div class="footer-mark">ECHO / FIELD</div>
+        <p>A living instrument for making art from attention.</p>
+        <a href="#top">BACK TO SIGNAL ↑</a>
+        <span>BUILT BY TAPASVI + SUHAS / 2026</span>
+      </footer>
+    </main>
+    <div class="welcome-overlay" id="welcomeOverlay"><div class="welcome-card"><div class="welcome-mark">ECHO / FIELD</div><h2>Give your attention<br/><em>a shape.</em></h2><p>A living instrument for making art from voice, motion, and memory. Move through the field. Nothing repeats exactly.</p><button class="begin-button" id="beginButton">ENTER THE FIELD <span>→</span></button><span class="welcome-note">MICROPHONE ACCESS IS OPTIONAL</span></div></div>
+    <div class="how-overlay" id="howOverlay" hidden><div class="how-card"><button class="close-how" id="closeHow">×</button><span class="section-label">FIELD NOTES</span><h2>Every gesture leaves<br/>a different trace.</h2><div class="how-steps"><div><b>01</b><span>MOVE</span><p>Guide the cursor-orb. Its wake bends the contour lines.</p></div><div><b>02</b><span>LISTEN</span><p>Let the microphone turn the room around you into energy.</p></div><div><b>03</b><span>HAND</span><p>Hand mode uses the small preview window to show the detected hand skeleton and target point.</p></div></div><button class="outline-button" id="howDone">RETURN TO THE FIELD</button></div></div>
+    <div class="mobile-warning-overlay" id="mobileWarningOverlay" hidden>
+      <div class="mobile-warning-card">
+        <h2>Optimal Experience</h2>
+        <p>ECHO / FIELD is heavily interactive and is highly recommended to be opened on a PC.</p>
+        <button class="begin-button" id="dismissMobileWarning">CONTINUE ANYWAY <span>→</span></button>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
