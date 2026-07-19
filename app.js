@@ -36,10 +36,10 @@ const poetryFragments = {
 };
 
 const palettes = {
-  prism: [265, 190, 76],
-  violet: [268, 250, 290],
-  lime: [74, 96, 115],
-  custom: [265, 190, 76]
+  prism: [188, 32, 350],
+  violet: [350, 8, 32],
+  lime: [188, 194, 202],
+  custom: [188, 32, 350]
 };
 
 let width = 0;
@@ -50,6 +50,9 @@ let seed = 731984512;
 let mode = 'voice';
 let energy = 0.22;
 let micLevel = 0;
+let micTone = 0;
+let micPeak = 0;
+let pressureLevel = 0;
 let density = 0.62;
 let drift = 0.34;
 let palette = 'prism';
@@ -73,6 +76,8 @@ let handConfidence = 0;
 let handLostFrames = 0;
 let visionTarget = { x: 0.5, y: 0.5 };
 let visionLocked = false;
+let handMotion = { x: 0, y: 0, speed: 0 };
+let lastHandTarget = { x: 0.5, y: 0.5 };
 
 let lastInteractionTime = Date.now();
 let isGhostMode = false;
@@ -116,6 +121,25 @@ function clamp01(n) {
 
 function easeTowards(current, target, factor) {
   return current + (target - current) * factor;
+}
+
+function currentInputEnergy() {
+  if (mode === 'voice') return clamp01(micLevel * 3.2 + micPeak * 0.35);
+  if (mode === 'vision') return clamp01(handConfidence * 0.25 + handMotion.speed * 7);
+  return clamp01(Math.hypot(pointer.tx - pointer.x, pointer.ty - pointer.y) * 18);
+}
+
+function getActiveColors() {
+  if (palette !== 'prism') return palettes[palette];
+  if (pressureLevel < 0.34) return [188, 194, 202];
+  if (pressureLevel < 0.68) return [32, 24, 42];
+  return [350, 356, 8];
+}
+
+function pressureRgba(alpha) {
+  if (pressureLevel < 0.34) return `rgba(0, 229, 255, ${alpha})`;
+  if (pressureLevel < 0.68) return `rgba(255, 149, 0, ${alpha})`;
+  return `rgba(255, 45, 85, ${alpha})`;
 }
 
 
@@ -207,21 +231,30 @@ function initSynth() {
 function updateSynthSound() {
   if (!synthActive || !audioSynthCtx) return;
   if (audioSynthCtx.state === 'suspended') audioSynthCtx.resume();
-  
-  const dx = pointer.tx - pointer.x;
-  const dy = pointer.ty - pointer.y;
-  const speed = Math.sqrt(dx * dx + dy * dy);
-  
-  let dynamicEnergy = mode === 'voice' ? micLevel * 0.18 : mode === 'vision' ? handConfidence * 0.1 : 0;
-  const targetVolume = Math.min(0.22, speed * 2.8 + 0.04 + dynamicEnergy);
-  synthGain.gain.setTargetAtTime(targetVolume, audioSynthCtx.currentTime, 0.15);
-  
-  const scaleIndex = Math.floor(Math.max(0, Math.min(1, pointer.x)) * (pentatonic.length - 1));
-  const targetFreq = pentatonic[scaleIndex];
+
+  const pointerSpeed = Math.hypot(pointer.tx - pointer.x, pointer.ty - pointer.y);
+  const inputEnergy = currentInputEnergy();
+  const gestureSpeed = mode === 'vision' ? handMotion.speed : pointerSpeed;
+  const targetVolume = mode === 'voice'
+    ? Math.min(0.28, 0.012 + inputEnergy * 0.26)
+    : Math.min(0.24, 0.018 + gestureSpeed * 1.8 + inputEnergy * 0.12);
+  synthGain.gain.setTargetAtTime(targetVolume, audioSynthCtx.currentTime, 0.09);
+
+  // Right-hand movement rises in pitch, left-hand movement falls. A louder
+  // mic opens the sound, rather than simply turning on a constant oscillator.
+  const directionalLift = mode === 'vision' ? handMotion.x * 3.4 : 0;
+  const voiceLift = mode === 'voice' ? (micTone - 0.45) * 0.28 : 0;
+  const notePosition = clamp01(pointer.x + directionalLift + voiceLift);
+  const scaleIndex = Math.floor(notePosition * (pentatonic.length - 1));
+  const targetFreq = pentatonic[scaleIndex] * (1 + (mode === 'vision' ? handMotion.x * 0.16 : 0));
   mainOsc.frequency.setTargetAtTime(targetFreq, audioSynthCtx.currentTime, 0.1);
-  
-  const targetFilterCutoff = 220 + (1 - pointer.y) * 1500 + energy * 350;
-  synthFilter.frequency.setTargetAtTime(targetFilterCutoff, audioSynthCtx.currentTime, 0.25);
+  subOsc.frequency.setTargetAtTime(targetFreq * 0.5, audioSynthCtx.currentTime, 0.14);
+
+  const targetFilterCutoff = mode === 'voice'
+    ? 180 + inputEnergy * 4200 + micTone * 900
+    : 220 + (1 - pointer.y) * 2100 + Math.max(0, -handMotion.y) * 3600 + gestureSpeed * 1500;
+  synthFilter.frequency.setTargetAtTime(targetFilterCutoff, audioSynthCtx.currentTime, 0.12);
+  synthFilter.Q.setTargetAtTime(0.8 + inputEnergy * 8, audioSynthCtx.currentTime, 0.16);
 }
 
 function playChime() {
@@ -263,7 +296,7 @@ function drawFlowField() {
   
   const cx = pointer.x * width;
   const cy = pointer.y * height;
-  const colors = palettes[palette];
+  const colors = getActiveColors();
   const lines = Math.floor(28 + density * 44);
 
   // Parallax shift based on cursor
@@ -353,7 +386,7 @@ function drawFlowField() {
   // Hover Glow Orb
   const glow = ctx.createRadialGradient(cx, cy, 1, cx, cy, width * 0.15);
   glow.addColorStop(0, 'rgba(255, 240, 255, 0.9)');
-  glow.addColorStop(0.1, 'rgba(157, 123, 255, 0.4)');
+  glow.addColorStop(0.1, pressureRgba(0.44));
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(cx - width * 0.2, cy - height * 0.2, width * 0.4, height * 0.4);
@@ -379,7 +412,7 @@ function drawField() {
 
 function drawOrbitField() {
   clearField();
-  const colors = palettes[palette];
+  const colors = getActiveColors();
   const cx = pointer.x * width;
   const cy = pointer.y * height;
   const radius = Math.min(width, height) * formScale * 0.72;
@@ -405,7 +438,7 @@ function drawOrbitField() {
   }
   const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, radius * 0.52);
   glow.addColorStop(0, `rgba(255, 245, 255, ${0.32 + intensity * 0.2})`);
-  glow.addColorStop(0.3, 'rgba(157, 123, 255, 0.14)');
+  glow.addColorStop(0.3, pressureRgba(0.16));
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
@@ -414,7 +447,7 @@ function drawOrbitField() {
 
 function drawConstellationField() {
   clearField();
-  const colors = palettes[palette];
+  const colors = getActiveColors();
   const count = Math.min(260, Math.floor(90 + density * 180));
   const nodes = [];
   ctx.save();
@@ -446,7 +479,7 @@ function drawConstellationField() {
 
 function drawTopographyField() {
   clearField();
-  const colors = palettes[palette];
+  const colors = getActiveColors();
   const cx = pointer.x * width;
   const cy = pointer.y * height;
   const maxRadius = Math.hypot(width, height) * formScale;
@@ -476,12 +509,14 @@ function animate() {
   // Ghost Mode Logic
   const now = Date.now();
   const autopilotChecked = document.querySelector('#toggleAutopilot')?.checked ?? true;
-  if (autopilotChecked && now - lastInteractionTime > 4000 && mode !== 'vision') {
+  const memoryAutopilot = mode === 'memory' && autopilotChecked;
+  const idleAutopilot = mode !== 'memory' && autopilotChecked && now - lastInteractionTime > 4000;
+  if ((memoryAutopilot || idleAutopilot) && mode !== 'vision') {
     isGhostMode = true;
     ghostT += 0.006;
     pointer.tx = 0.5 + Math.sin(ghostT * 1.3) * 0.35 + Math.sin(ghostT * 2.7) * 0.1;
     pointer.ty = 0.5 + Math.cos(ghostT * 1.1) * 0.35 + Math.sin(ghostT * 2.9) * 0.1;
-    document.querySelector('#canvasHint').textContent = "AUTOPILOT / GHOST MODE";
+    document.querySelector('#canvasHint').textContent = mode === 'memory' ? "MEMORY / AUTO-GHOST" : "AUTOPILOT / GHOST MODE";
     document.querySelector('#canvasHint').style.opacity = 0.8;
   } else {
     isGhostMode = false;
@@ -489,8 +524,18 @@ function animate() {
 
   pointer.x += (pointer.tx - pointer.x) * 0.08;
   pointer.y += (pointer.ty - pointer.y) * 0.08;
+  if (mode === 'vision' && !visionLocked) {
+    handMotion.x *= 0.88;
+    handMotion.y *= 0.88;
+    handMotion.speed *= 0.86;
+  }
   
-  let activeEnergy = mode === 'voice' ? micLevel * 0.5 : mode === 'vision' ? handConfidence * 0.28 : 0;
+  const inputEnergy = currentInputEnergy();
+  pressureLevel = easeTowards(pressureLevel, inputEnergy, 0.1);
+  const pressureAccent = pressureLevel < 0.34 ? '#00E5FF' : pressureLevel < 0.68 ? '#FF9500' : '#FF2D55';
+  document.documentElement.style.setProperty('--energy-accent', pressureAccent);
+  document.documentElement.style.setProperty('--input-pressure', pressureLevel.toFixed(3));
+  let activeEnergy = mode === 'voice' ? inputEnergy * 0.68 : mode === 'vision' ? inputEnergy * 0.58 : inputEnergy * 0.24;
   energy = 0.16 + Math.abs(Math.sin(t * 0.7)) * 0.16 + activeEnergy + drift * 0.12;
   
   drawField();
@@ -546,6 +591,8 @@ function animate() {
     const confVal = document.querySelector('#confidenceVal');
     if (confBar) confBar.style.width = `${confidence}%`;
     if (confVal) confVal.textContent = `${confidence}%`;
+    const inputReadout = document.querySelector('#inputReadout');
+    if (inputReadout) inputReadout.textContent = `${String(Math.round(inputEnergy * 100)).padStart(2, '0')}%`;
   }
 
   // Update Target Lock Reticle position & visibility
@@ -562,15 +609,19 @@ function animate() {
 
   // Animate Waveform
   if (waveSpans.length) {
-    const waveColors = palettes[palette];
+    const waveColors = getActiveColors();
     for (let i = 0; i < waveSpans.length; i++) {
       let h;
-      if (mode === 'voice' && micLevel > 0.01) {
-        h = 8 + (micLevel * 45) * (0.3 + 0.7 * Math.sin(t * 6 + i * 0.3));
+      if (mode === 'voice' && inputEnergy > 0.01) {
+        h = 6 + (inputEnergy * 48) * (0.28 + 0.72 * Math.sin(t * (5 + micTone * 5) + i * 0.3));
         waveSpans[i].style.backgroundColor = `hsla(${waveColors[i % 3]}, 88%, 70%, 0.9)`;
       } else if (mode === 'vision' && handConfidence > 0.01) {
-        h = 8 + (handConfidence * 60) * (0.3 + 0.7 * Math.sin(t * 8 + i * 0.4));
+        h = 7 + (inputEnergy * 58) * (0.3 + 0.7 * Math.sin(t * (7 + handMotion.x * 16) + i * 0.4));
         waveSpans[i].style.backgroundColor = `hsla(${waveColors[(i+1) % 3]}, 88%, 70%, 0.8)`;
+      } else if (mode === 'memory') {
+        const memoryIsMoving = document.querySelector('#toggleAutopilot')?.checked ?? true;
+        h = memoryIsMoving ? 8 + inputEnergy * 32 * (0.45 + 0.55 * Math.sin(t * 3 + i * 0.22)) : 8;
+        waveSpans[i].style.backgroundColor = memoryIsMoving ? `hsla(${waveColors[i % 3]}, 88%, 70%, 0.62)` : '';
       } else {
         const speed = mode === 'motion' ? 2.5 : 1.2;
         const amp = mode === 'motion' ? 12 : 5;
@@ -606,6 +657,10 @@ function syncInspectorBtn() {
 
 function setMode(next) {
   mode = next;
+  if (next === 'memory') {
+    pointer.tx = pointer.x;
+    pointer.ty = pointer.y;
+  }
   document.querySelectorAll('.input-module').forEach(b => {
     const on = b.dataset.mode === next;
     b.classList.toggle('active', on);
@@ -613,6 +668,13 @@ function setMode(next) {
   });
   
   statusText.textContent = next === 'voice' ? 'LISTENING' : next === 'vision' ? 'HAND TRACKING' : next === 'motion' ? 'TRACKING' : 'REMEMBERING';
+  const guide = document.querySelector('#gestureGuide');
+  if (guide) {
+    guide.textContent = next === 'voice' ? 'MIC LEVEL → VOLUME + BLOOM'
+      : next === 'vision' ? '← LOWER PITCH · RIGHT RAISES · UP BRIGHTENS →'
+      : next === 'motion' ? 'POINTER SPEED → FLOW + TONE'
+      : 'MEMORY MODE → SLOW FIELD EVOLUTION';
+  }
   generatePoetry();
   
   if (next === 'voice') {
@@ -634,9 +696,11 @@ async function startMic() {
     audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 64;
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.72;
     audioCtx.createMediaStreamSource(audioStream).connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Uint8Array(analyser.fftSize);
     
     const tick = () => {
       if (!audioStream) {
@@ -644,7 +708,19 @@ async function startMic() {
         return;
       }
       analyser.getByteFrequencyData(data);
-      micLevel = data.reduce((a, b) => a + b, 0) / (data.length * 255);
+      analyser.getByteTimeDomainData(timeData);
+      let sumSquares = 0;
+      for (const sample of timeData) {
+        const value = (sample - 128) / 128;
+        sumSquares += value * value;
+      }
+      const rms = Math.sqrt(sumSquares / timeData.length);
+      const spectralMean = data.reduce((a, b) => a + b, 0) / (data.length * 255);
+      const weightedTone = data.reduce((sum, value, index) => sum + value * index, 0) /
+        Math.max(1, data.reduce((sum, value) => sum + value, 0) * (data.length - 1));
+      micLevel = easeTowards(micLevel, Math.min(1, rms * 5.2 + spectralMean * 0.35), 0.24);
+      micPeak = Math.max(micLevel, micPeak * 0.92);
+      micTone = easeTowards(micTone, Number.isFinite(weightedTone) ? weightedTone : 0, 0.14);
       requestAnimationFrame(tick);
     };
     tick();
@@ -666,6 +742,8 @@ function stopMic() {
     audioCtx = null;
   }
   micLevel = 0;
+  micTone = 0;
+  micPeak = 0;
 }
 
 async function startVision() {
@@ -709,8 +787,19 @@ async function startVision() {
       const palmY = (wrist.y + indexMcp.y + landmarks[9].y) / 3;
       const targetX = 1 - clamp01(indexTip.x * 0.72 + palmX * 0.28);
       const targetY = clamp01(indexTip.y * 0.72 + palmY * 0.28);
-      visionTarget.x = easeTowards(visionTarget.x, targetX, 0.28);
-      visionTarget.y = easeTowards(visionTarget.y, targetY, 0.28);
+      const smoothing = Number(document.querySelector('#trackingSmoothing')?.value || 0.08);
+      const response = 0.18 + (0.5 - smoothing) * 0.42;
+      const threshold = Number(document.querySelector('#motionThreshold')?.value || 18) / 10000;
+      const deltaX = targetX - lastHandTarget.x;
+      const deltaY = targetY - lastHandTarget.y;
+      const rawMotionX = Math.abs(deltaX) > threshold ? deltaX : 0;
+      const rawMotionY = Math.abs(deltaY) > threshold ? deltaY : 0;
+      handMotion.x = easeTowards(handMotion.x, rawMotionX, 0.42);
+      handMotion.y = easeTowards(handMotion.y, rawMotionY, 0.42);
+      handMotion.speed = easeTowards(handMotion.speed, Math.hypot(rawMotionX, rawMotionY), 0.36);
+      lastHandTarget = { x: targetX, y: targetY };
+      visionTarget.x = easeTowards(visionTarget.x, targetX, response);
+      visionTarget.y = easeTowards(visionTarget.y, targetY, response);
       pointer.tx = visionTarget.x;
       pointer.ty = visionTarget.y;
       handConfidence = easeTowards(handConfidence, 1, 0.2);
@@ -784,6 +873,8 @@ function stopVision() {
   handTracker = null;
   handFramePending = false;
   handConfidence = 0;
+  handMotion = { x: 0, y: 0, speed: 0 };
+  lastHandTarget = { x: 0.5, y: 0.5 };
   handLostFrames = 0;
   visionLocked = false;
   if (handOverlayCtx && handOverlay) handOverlayCtx.clearRect(0, 0, handOverlay.width, handOverlay.height);
@@ -944,7 +1035,7 @@ document.querySelectorAll('.input-module').forEach(b => {
 
 wrap.addEventListener('pointermove', e => {
   lastInteractionTime = Date.now();
-  if (mode !== 'vision') { // Don't override vision tracking with mouse if vision is active
+  if (mode !== 'vision' && mode !== 'memory') { // Memory is controlled only by Auto-Ghost.
     const r = wrap.getBoundingClientRect();
     pointer.tx = (e.clientX - r.left) / r.width;
     pointer.ty = (e.clientY - r.top) / r.height;
@@ -954,6 +1045,7 @@ wrap.addEventListener('pointermove', e => {
 
 // Click Ripples
 wrap.addEventListener('click', e => {
+  if (mode === 'memory') return;
   lastInteractionTime = Date.now();
   const r = wrap.getBoundingClientRect();
   const clickX = (e.clientX - r.left) / r.width;
@@ -965,7 +1057,7 @@ wrap.addEventListener('click', e => {
     radius: 0,
     maxRadius: 100 + Math.random() * 80,
     opacity: 1,
-    hue: palettes[palette][Math.floor(Math.random() * 3)]
+    hue: getActiveColors()[Math.floor(Math.random() * 3)]
   });
   
   if (ripples.length > 6) ripples.shift();
@@ -1022,6 +1114,17 @@ document.querySelectorAll('.palette-choice').forEach(b => {
 customColor1.addEventListener('input', updateCustomPalette);
 customColor2.addEventListener('input', updateCustomPalette);
 customColor3.addEventListener('input', updateCustomPalette);
+
+document.querySelector('#toggleAutopilot')?.addEventListener('change', event => {
+  if (mode === 'memory' && !event.target.checked) {
+    pointer.tx = pointer.x;
+    pointer.ty = pointer.y;
+    statusText.textContent = 'MEMORY HELD';
+    document.querySelector('#canvasHint').textContent = 'MEMORY HELD / AUTO-GHOST OFF';
+  } else if (mode === 'memory') {
+    statusText.textContent = 'MEMORY DRIFTING';
+  }
+});
 
 if (toggleInspectorBtn) {
   toggleInspectorBtn.addEventListener('click', () => {
@@ -1080,7 +1183,188 @@ if (localStorage.getItem('echo-started')) {
   setMode('motion');
 }
 
+// Mobile Warning Logic
+const mobileWarningOverlay = document.querySelector('#mobileWarningOverlay');
+const dismissMobileWarningBtn = document.querySelector('#dismissMobileWarning');
+
+const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+if (isMobileDevice && !localStorage.getItem('echo-mobile-dismissed')) {
+  if (mobileWarningOverlay) mobileWarningOverlay.style.display = 'flex';
+}
+
+dismissMobileWarningBtn?.addEventListener('click', () => {
+  if (mobileWarningOverlay) mobileWarningOverlay.style.display = 'none';
+  localStorage.setItem('echo-mobile-dismissed', '1');
+});
+
 window.addEventListener('resize', resize);
+
+// Editorial site motion + Enhanced scroll animations -------------------------
+const heroParticleCanvas = document.querySelector('#heroParticles');
+const makersParticleCanvas = document.querySelector('.makers-section .section-particles');
+const soundSculpture = document.querySelector('#soundSculpture');
+const storySection = document.querySelector('#story');
+const storyProgress = document.querySelector('#storyProgress');
+const storyTimelineFill = document.querySelector('#storyTimelineFill');
+const storyTimeline = document.querySelector('#storyTimeline');
+const storyCards = document.querySelectorAll('.story-card');
+const storyNumbers = document.querySelectorAll('.story-card__number');
+const storyHero = document.querySelector('.story-hero');
+const siteNav = document.querySelector('.site-nav');
+const ambientLightA = document.querySelector('.ambient-light-a');
+const ambientLightB = document.querySelector('.ambient-light-b');
+const siteParticleSystems = [];
+
+function createSiteParticles(canvasElement, light = false) {
+  if (!canvasElement) return null;
+  const context = canvasElement.getContext('2d');
+  const system = {
+    canvas: canvasElement,
+    context,
+    light,
+    width: 0,
+    height: 0,
+    points: Array.from({ length: light ? 85 : 130 }, (_, index) => ({
+      seed: index * 0.618,
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.6 + 0.4,
+      phase: Math.random() * Math.PI * 2
+    }))
+  };
+  siteParticleSystems.push(system);
+  return system;
+}
+
+createSiteParticles(heroParticleCanvas, false);
+createSiteParticles(makersParticleCanvas, true);
+
+function resizeSiteParticles() {
+  siteParticleSystems.forEach(system => {
+    const rect = system.canvas.getBoundingClientRect();
+    const pixelRatio = Math.min(1.6, window.devicePixelRatio || 1);
+    system.width = rect.width;
+    system.height = rect.height;
+    system.canvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
+    system.canvas.height = Math.max(1, Math.floor(rect.height * pixelRatio));
+    system.context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  });
+}
+
+function drawSiteParticles(timestamp = 0) {
+  const scrollRatio = clamp01(window.scrollY / Math.max(1, window.innerHeight * 1.8));
+  siteParticleSystems.forEach(system => {
+    const { context, width: w, height: h } = system;
+    context.clearRect(0, 0, w, h);
+    const centerX = w * (system.light ? 0.82 : 0.7);
+    const centerY = h * (system.light ? 0.35 : 0.5);
+    system.points.forEach((point, index) => {
+      const angle = point.seed * Math.PI * 8 + timestamp * 0.00007;
+      const radius = (0.12 + (index % 31) / 31 * 0.46) * Math.min(w, h);
+      const freeX = point.x * w + Math.sin(timestamp * 0.00018 + point.phase) * 16;
+      const freeY = point.y * h + Math.cos(timestamp * 0.00014 + point.phase) * 12;
+      const orbitX = centerX + Math.cos(angle) * radius;
+      const orbitY = centerY + Math.sin(angle) * radius * 0.44;
+      const morph = system.light ? .72 : scrollRatio;
+      const x = freeX + (orbitX - freeX) * morph;
+      const y = freeY + (orbitY - freeY) * morph;
+      const hue = index % 3 === 0 ? 188 : index % 3 === 1 ? 32 : 350;
+      context.fillStyle = system.light
+        ? `hsla(${hue}, 70%, 35%, ${0.08 + (index % 5) * 0.025})`
+        : `hsla(${hue}, 92%, 72%, ${0.12 + (index % 6) * 0.035})`;
+      context.beginPath();
+      context.arc(x, y, point.size, 0, Math.PI * 2);
+      context.fill();
+    });
+  });
+  requestAnimationFrame(drawSiteParticles);
+}
+
+// Enhanced reveal observer — supports .reveal, .reveal-left, .reveal-right, .reveal-scale
+const revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('is-visible');
+  });
+}, { threshold: 0.13, rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('.reveal').forEach(element => revealObserver.observe(element));
+
+// Active chapter observer — highlights card in viewport center
+const chapterObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      // Deactivate all other cards
+      storyCards.forEach(card => card.classList.remove('is-active'));
+      entry.target.classList.add('is-active');
+    }
+  });
+}, { threshold: 0.35, rootMargin: '-20% 0px -20% 0px' });
+storyCards.forEach(card => chapterObserver.observe(card));
+
+function updateSiteScroll() {
+  const scrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  const pageProgress = clamp01(window.scrollY / scrollable);
+  document.documentElement.style.setProperty('--nav-progress', `${pageProgress * 100}%`);
+  document.documentElement.style.setProperty('--scroll-rotate', `${pageProgress * 210}deg`);
+  siteNav?.classList.toggle('has-progress', pageProgress > 0.015);
+
+  // The two light bodies trade sides as the visitor travels down the page.
+  if (ambientLightA && ambientLightB) {
+    const lightSize = Math.min(window.innerWidth * 0.3, 520);
+    const aX = window.innerWidth * (0.72 - pageProgress * 0.62) - lightSize * 0.5;
+    const aY = window.innerHeight * (0.08 + pageProgress * 0.68) - lightSize * 0.5;
+    const bX = window.innerWidth * (0.08 + pageProgress * 0.68) - lightSize * 0.5;
+    const bY = window.innerHeight * (0.72 - pageProgress * 0.58) - lightSize * 0.5;
+    ambientLightA.style.transform = `translate3d(${aX}px, ${aY}px, 0) scale(${0.86 + Math.sin(pageProgress * Math.PI) * 0.34})`;
+    ambientLightB.style.transform = `translate3d(${bX}px, ${bY}px, 0) scale(${1.08 - Math.sin(pageProgress * Math.PI) * 0.28})`;
+  }
+
+  // Story section progress meter
+  if (storySection && storyProgress) {
+    const rect = storySection.getBoundingClientRect();
+    const journey = Math.max(1, rect.height - window.innerHeight);
+    storyProgress.style.width = `${clamp01(-rect.top / journey) * 100}%`;
+  }
+
+  // Timeline vertical fill — fills as you scroll through the story section
+  if (storyTimeline && storyTimelineFill) {
+    const timelineRect = storyTimeline.getBoundingClientRect();
+    const viewportMid = window.innerHeight * 0.5;
+    const fillProgress = clamp01((viewportMid - timelineRect.top) / Math.max(1, timelineRect.height));
+    storyTimelineFill.style.height = `${fillProgress * 100}%`;
+  }
+
+  // Parallax chapter numbers — move at 30% scroll speed relative to viewport
+  storyNumbers.forEach(num => {
+    const cardRect = num.closest('.story-card').getBoundingClientRect();
+    const cardCenter = cardRect.top + cardRect.height * 0.5;
+    const viewportCenter = window.innerHeight * 0.5;
+    const offset = (cardCenter - viewportCenter) * 0.3;
+    num.style.transform = `translateY(${offset}px)`;
+  });
+
+  // Heading scale-zoom — story hero scales slightly as it enters
+  if (storyHero) {
+    const heroRect = storyHero.getBoundingClientRect();
+    const heroProgress = clamp01(1 - heroRect.top / (window.innerHeight * 0.65));
+    const scale = 0.92 + heroProgress * 0.08;
+    storyHero.style.setProperty('--hero-scale', scale);
+  }
+
+  const hero = document.querySelector('.landing-hero');
+  if (hero) hero.style.setProperty('--hero-shift', `${Math.min(window.scrollY * 0.12, 100)}px`);
+}
+
+document.querySelector('.landing-hero')?.addEventListener('pointermove', event => {
+  if (!soundSculpture) return;
+  const x = event.clientX / window.innerWidth - 0.5;
+  const y = event.clientY / window.innerHeight - 0.5;
+  soundSculpture.style.setProperty('--ry', `${-14 + x * 22}deg`);
+  soundSculpture.style.setProperty('--rx', `${-12 - y * 18}deg`);
+});
+
+window.addEventListener('resize', resizeSiteParticles);
+window.addEventListener('scroll', updateSiteScroll, { passive: true });
 
 // Initialization
 updateCustomPalette();
@@ -1088,6 +1372,7 @@ buildWave();
 renderSaved();
 setFieldNumber();
 resize();
+resizeSiteParticles();
+updateSiteScroll();
+requestAnimationFrame(drawSiteParticles);
 animate();
-
-
