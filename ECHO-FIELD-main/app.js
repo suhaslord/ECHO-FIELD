@@ -228,6 +228,44 @@ function initSynth() {
   }
 }
 
+// Sound Presets & Audio Energy Variables
+let currentAudioPreset = 'ambient';
+let audioBassEnergy = 0;
+let audioMelodyEnergy = 0;
+
+const presetScales = {
+  ambient: [110, 130.81, 146.83, 164.81, 196.00, 220],
+  pulse: [65.41, 98.00, 130.81, 196.00, 261.63, 392.00],
+  zen: [174.61, 220.00, 261.63, 349.23, 440.00, 523.25],
+  ethereal: [277.18, 329.63, 415.30, 493.88, 554.37, 659.25],
+  abyss: [32.70, 49.00, 65.41, 98.00, 130.81, 196.00],
+  crystal: [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50]
+};
+const presetKeys = Object.keys(presetScales);
+
+function selectAudioPreset(presetName) {
+  currentAudioPreset = presetName;
+  synthActive = true;
+  if (toggleSoundBtn) {
+    toggleSoundBtn.classList.add('active');
+    toggleSoundBtn.textContent = 'SOUND: ON';
+  }
+  const presetCycleBtn = document.querySelector('#presetCycleBtn');
+  if (presetCycleBtn) {
+    presetCycleBtn.textContent = `PRESET: ${presetName.toUpperCase()}`;
+  }
+  initSynth();
+  if (audioSynthCtx && audioSynthCtx.state === 'suspended') {
+    audioSynthCtx.resume();
+  }
+  
+  document.querySelectorAll('.preset-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.preset === presetName);
+  });
+
+  statusText.textContent = `PRESET: ${presetName.toUpperCase()}`;
+}
+
 function updateSynthSound() {
   if (!synthActive || !audioSynthCtx) return;
   if (audioSynthCtx.state === 'suspended') audioSynthCtx.resume();
@@ -235,26 +273,47 @@ function updateSynthSound() {
   const pointerSpeed = Math.hypot(pointer.tx - pointer.x, pointer.ty - pointer.y);
   const inputEnergy = currentInputEnergy();
   const gestureSpeed = mode === 'vision' ? handMotion.speed : pointerSpeed;
+
+  // Modulate energy based on preset rhythm
+  if (currentAudioPreset === 'pulse') {
+    audioBassEnergy = 0.5 + Math.sin(t * 16) * 0.5;
+    audioMelodyEnergy = 0.4 + Math.cos(t * 24) * 0.4;
+  } else if (currentAudioPreset === 'zen') {
+    audioBassEnergy = 0.15 + Math.sin(t * 1.5) * 0.15;
+    audioMelodyEnergy = 0.3 + Math.sin(t * 6) * 0.3;
+  } else if (currentAudioPreset === 'ambient') {
+    audioBassEnergy = 0.25 + Math.sin(t * 1.5) * 0.15;
+    audioMelodyEnergy = 0.2 + Math.cos(t * 2.2) * 0.15;
+  } else if (currentAudioPreset === 'ethereal') {
+    audioBassEnergy = 0.1 + Math.sin(t * 0.8) * 0.1;
+    audioMelodyEnergy = 0.6 + Math.cos(t * 4) * 0.3;
+  } else if (currentAudioPreset === 'abyss') {
+    audioBassEnergy = 0.7 + Math.sin(t * 2) * 0.3;
+    audioMelodyEnergy = 0.1 + Math.cos(t * 0.5) * 0.1;
+  } else if (currentAudioPreset === 'crystal') {
+    audioBassEnergy = 0.2 + Math.sin(t * 8) * 0.1;
+    audioMelodyEnergy = 0.8 + Math.cos(t * 16) * 0.2;
+  }
+
   const targetVolume = mode === 'voice'
     ? Math.min(0.28, 0.012 + inputEnergy * 0.26)
-    : Math.min(0.24, 0.018 + gestureSpeed * 1.8 + inputEnergy * 0.12);
+    : Math.min(0.24, 0.018 + gestureSpeed * 1.8 + inputEnergy * 0.12 + audioBassEnergy * 0.08);
   synthGain.gain.setTargetAtTime(targetVolume, audioSynthCtx.currentTime, 0.09);
 
-  // Right-hand movement rises in pitch, left-hand movement falls. A louder
-  // mic opens the sound, rather than simply turning on a constant oscillator.
+  const scale = presetScales[currentAudioPreset] || pentatonic;
   const directionalLift = mode === 'vision' ? handMotion.x * 3.4 : 0;
   const voiceLift = mode === 'voice' ? (micTone - 0.45) * 0.28 : 0;
-  const notePosition = clamp01(pointer.x + directionalLift + voiceLift);
-  const scaleIndex = Math.floor(notePosition * (pentatonic.length - 1));
-  const targetFreq = pentatonic[scaleIndex] * (1 + (mode === 'vision' ? handMotion.x * 0.16 : 0));
+  const notePosition = clamp01(pointer.x + directionalLift + voiceLift + audioMelodyEnergy * 0.2);
+  const scaleIndex = Math.floor(notePosition * (scale.length - 1));
+  const targetFreq = scale[scaleIndex] * (1 + (mode === 'vision' ? handMotion.x * 0.16 : 0));
   mainOsc.frequency.setTargetAtTime(targetFreq, audioSynthCtx.currentTime, 0.1);
   subOsc.frequency.setTargetAtTime(targetFreq * 0.5, audioSynthCtx.currentTime, 0.14);
 
   const targetFilterCutoff = mode === 'voice'
     ? 180 + inputEnergy * 4200 + micTone * 900
-    : 220 + (1 - pointer.y) * 2100 + Math.max(0, -handMotion.y) * 3600 + gestureSpeed * 1500;
+    : 220 + (1 - pointer.y) * 2100 + Math.max(0, -handMotion.y) * 3600 + gestureSpeed * 1500 + audioBassEnergy * 1200;
   synthFilter.frequency.setTargetAtTime(targetFilterCutoff, audioSynthCtx.currentTime, 0.12);
-  synthFilter.Q.setTargetAtTime(0.8 + inputEnergy * 8, audioSynthCtx.currentTime, 0.16);
+  synthFilter.Q.setTargetAtTime(0.8 + inputEnergy * 8 + audioBassEnergy * 4, audioSynthCtx.currentTime, 0.16);
 }
 
 function playChime() {
@@ -263,8 +322,28 @@ function playChime() {
     const chimeOsc = audioSynthCtx.createOscillator();
     const chimeGain = audioSynthCtx.createGain();
     
-    chimeOsc.type = 'sine';
-    const note = pentatonic[Math.floor(8 + Math.random() * 7)];
+    const scale = presetScales[currentAudioPreset] || presetScales['ambient'];
+    let note;
+    if (currentAudioPreset === 'pulse') {
+        note = scale[Math.floor(2 + Math.random() * 4)];
+        chimeOsc.type = 'square';
+    } else if (currentAudioPreset === 'zen') {
+        note = scale[Math.floor(3 + Math.random() * 3)];
+        chimeOsc.type = 'sine';
+    } else if (currentAudioPreset === 'ethereal') {
+        note = scale[Math.floor(Math.random() * scale.length)];
+        chimeOsc.type = 'triangle';
+    } else if (currentAudioPreset === 'abyss') {
+        note = scale[Math.floor(Math.random() * 3)];
+        chimeOsc.type = 'sawtooth';
+    } else if (currentAudioPreset === 'crystal') {
+        note = scale[Math.floor(3 + Math.random() * 3)];
+        chimeOsc.type = 'sine';
+    } else {
+        note = scale[Math.floor(Math.random() * scale.length)];
+        chimeOsc.type = 'sine';
+    }
+    
     chimeOsc.frequency.setValueAtTime(note * 2, audioSynthCtx.currentTime);
     
     chimeGain.gain.setValueAtTime(0.2, audioSynthCtx.currentTime);
@@ -763,7 +842,7 @@ async function startVision() {
     const preview = document.querySelector('#trackingPreview');
 
     handTracker = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}` });
-    handTracker.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.72, minTrackingConfidence: 0.68 });
+    handTracker.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.72, minTrackingConfidence: 0.68 });
     handTracker.onResults(results => {
       drawHandResults(results);
       const landmarks = results.multiHandLandmarks?.[0];
@@ -1366,6 +1445,219 @@ document.querySelector('.landing-hero')?.addEventListener('pointermove', event =
 window.addEventListener('resize', resizeSiteParticles);
 window.addEventListener('scroll', updateSiteScroll, { passive: true });
 
+// ==========================================================================
+// 18. AI CHATBOT LOGIC & CUSTOM SONG EVENT BINDINGS
+// ==========================================================================
+
+const aiChatToggleBtn = document.querySelector('#aiChatToggle');
+const aiChatBoxEl = document.querySelector('#aiChatBox');
+const closeChatBtn = document.querySelector('#closeChat');
+const chatInputForm = document.querySelector('#chatInputForm');
+const chatInputEl = document.querySelector('#chatInput');
+const promptChipsEl = document.querySelector('#promptChips');
+
+const customSongBtn = document.querySelector('#customSongBtn');
+const openCustomSongBtn = document.querySelector('#openCustomSongBtn');
+const customSongOverlay = document.querySelector('#customSongOverlay');
+const closeCustomSongBtn = document.querySelector('#closeCustomSong');
+const customSongDoneBtn = document.querySelector('#customSongDone');
+const loadCustomSongBtn = document.querySelector('#loadCustomSongBtn');
+const customSongUrlInput = document.querySelector('#customSongUrl');
+
+// AI Chatbot UI Event Listeners
+aiChatToggleBtn?.addEventListener('click', () => {
+  if (aiChatBoxEl) {
+    const isHidden = aiChatBoxEl.hidden;
+    aiChatBoxEl.hidden = !isHidden;
+    if (isHidden && chatInputEl) {
+      chatInputEl.focus();
+    }
+  }
+});
+
+closeChatBtn?.addEventListener('click', () => {
+  if (aiChatBoxEl) aiChatBoxEl.hidden = true;
+});
+
+chatInputForm?.addEventListener('click', () => {
+  lastInteractionTime = Date.now();
+});
+
+chatInputForm?.addEventListener('submit', event => {
+  event.preventDefault();
+  const text = chatInputEl?.value || '';
+  if (!text.trim()) return;
+  chatInputEl.value = '';
+  processAiMessage(text);
+});
+
+promptChipsEl?.querySelectorAll('.prompt-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const prompt = chip.dataset.prompt;
+    if (prompt) {
+      if (aiChatBoxEl) aiChatBoxEl.hidden = false;
+      processAiMessage(prompt);
+    }
+  });
+});
+
+const presetCycleBtn = document.querySelector('#presetCycleBtn');
+presetCycleBtn?.addEventListener('click', () => {
+  const currentIndex = presetKeys.indexOf(currentAudioPreset);
+  const nextIndex = (currentIndex + 1) % presetKeys.length;
+  selectAudioPreset(presetKeys[nextIndex]);
+});
+
+function appendChatMessage(role, text) {
+  const container = document.querySelector('#chatMessages');
+  if (!container) return;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-msg ${role}`;
+
+  const authorDiv = document.createElement('div');
+  authorDiv.className = 'msg-author';
+  authorDiv.textContent = role === 'user' ? 'YOU' : 'ECHO AI';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'msg-content';
+  contentDiv.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  msgDiv.append(authorDiv, contentDiv);
+  container.append(msgDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+function processAiMessage(userText) {
+  const text = userText.trim().toLowerCase();
+  if (!text) return;
+
+  // Append user message
+  appendChatMessage('user', userText);
+
+  // Analyze intent & respond
+  setTimeout(() => {
+    let responseText = '';
+
+    // 1. Color / Palette Changes
+    if (text.includes('color') || text.includes('palette') || text.includes('hue') || text.includes('cyan') || text.includes('pink') || text.includes('purple') || text.includes('blue') || text.includes('green') || text.includes('red') || text.includes('yellow') || text.includes('violet') || text.includes('prism') || text.includes('lime') || text.includes('magenta')) {
+      if (text.includes('violet') || text.includes('peak')) {
+        palette = 'violet';
+      } else if (text.includes('lime') || text.includes('ambient')) {
+        palette = 'lime';
+      } else if (text.includes('prism') || text.includes('pressure')) {
+        palette = 'prism';
+      } else {
+        palette = 'custom';
+        if (text.includes('cyan') || text.includes('magenta') || text.includes('pink')) {
+          customColor1.value = '#00e5ff';
+          customColor2.value = '#ff2d55';
+          customColor3.value = '#a855f7';
+        } else if (text.includes('green') || text.includes('lime') || text.includes('emerald')) {
+          customColor1.value = '#10b981';
+          customColor2.value = '#a3e635';
+          customColor3.value = '#06b6d4';
+        } else if (text.includes('yellow') || text.includes('gold') || text.includes('orange') || text.includes('fire')) {
+          customColor1.value = '#ff9500';
+          customColor2.value = '#ffcc00';
+          customColor3.value = '#ff3b30';
+        } else if (text.includes('blue') || text.includes('ocean')) {
+          customColor1.value = '#007aff';
+          customColor2.value = '#5856d6';
+          customColor3.value = '#34c759';
+        } else {
+          customColor1.value = '#a855f7';
+          customColor2.value = '#00e5ff';
+          customColor3.value = '#ff2d55';
+        }
+        updateCustomPalette();
+      }
+
+      document.querySelectorAll('.palette-choice').forEach(x => {
+        x.classList.toggle('selected', x.dataset.palette === palette);
+      });
+      customColorsRow.style.display = palette === 'custom' ? 'flex' : 'none';
+      statusText.textContent = 'PALETTE SHIFTED';
+      responseText = `I've updated the soundwave visual palette to **${palette.toUpperCase()}**! Watch the contour lines shift color.`;
+    }
+
+    // 2. Mode Changes (Voice, Motion, Memory, Vision)
+    else if (text.includes('mode') || text.includes('voice') || text.includes('mic') || text.includes('motion') || text.includes('cursor') || text.includes('memory') || text.includes('vision') || text.includes('camera') || text.includes('hand')) {
+      let targetMode = 'motion';
+      if (text.includes('voice') || text.includes('mic') || text.includes('audio')) targetMode = 'voice';
+      else if (text.includes('vision') || text.includes('camera') || text.includes('hand') || text.includes('gesture')) targetMode = 'vision';
+      else if (text.includes('memory') || text.includes('drift')) targetMode = 'memory';
+      else targetMode = 'motion';
+
+      setMode(targetMode);
+      responseText = `Switched input channel to **${targetMode.toUpperCase()}** mode! ${
+        targetMode === 'voice' ? 'Speak or make sound into your mic.' :
+        targetMode === 'vision' ? 'Move your hand in front of your camera.' :
+        targetMode === 'memory' ? 'The field will slowly drift through state memory.' :
+        'Move your cursor across the screen.'
+      }`;
+    }
+
+    // 3. Audio Presets & Custom Songs
+    else if (text.includes('preset') || text.includes('song') || text.includes('youtube') || text.includes('music') || text.includes('audio') || text.includes('sound') || text.includes('cyber') || text.includes('pulse') || text.includes('zen') || text.includes('ambient')) {
+      if (text.includes('pulse') || text.includes('cyber')) {
+        selectAudioPreset('pulse');
+        responseText = `Activated **Cyber Pulse** audio preset! The soundwaves are now pulsing to rhythmic bass.`;
+      } else if (text.includes('zen') || text.includes('deep')) {
+        selectAudioPreset('zen');
+        responseText = `Activated **Deep Zen** audio preset! Enjoy meditative bell chimes and sub-bass contours.`;
+      } else if (text.includes('ambient') || text.includes('ether')) {
+        selectAudioPreset('ambient');
+        responseText = `Activated **Ambient Ether** audio preset! Pentatonic synth frequency field active.`;
+      } else if (text.includes('http') || text.includes('youtube') || text.includes('youtu.be')) {
+        const urlMatch = userText.match(/(https?:\/\/[^\s]+)/);
+        const songUrl = urlMatch ? urlMatch[0] : 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        loadCustomAudioUrl(songUrl);
+        responseText = `Loaded custom song link: **${songUrl}**! The soundwave visualizer is reacting live to your track.`;
+      } else {
+        if (customSongOverlay) customSongOverlay.hidden = false;
+        responseText = `I opened the **Custom Song & Audio Preset** window for you! Pick from 3 sound presets or paste any YouTube / Audio link.`;
+      }
+    }
+
+    // 4. Visual Form Style (Flow, Orbit, Stars, Topo)
+    else if (text.includes('form') || text.includes('style') || text.includes('orbit') || text.includes('stars') || text.includes('constellation') || text.includes('topo') || text.includes('topography') || text.includes('flow')) {
+      let targetStyle = 'flow';
+      if (text.includes('orbit')) targetStyle = 'orbit';
+      else if (text.includes('stars') || text.includes('constellation')) targetStyle = 'constellation';
+      else if (text.includes('topo')) targetStyle = 'topography';
+      else targetStyle = 'flow';
+
+      visualStyle = targetStyle;
+      document.querySelectorAll('.form-choice').forEach(b => b.classList.toggle('selected', b.dataset.style === targetStyle));
+      statusText.textContent = `${targetStyle.toUpperCase()} FORM`;
+      responseText = `Changed visual contour form to **${targetStyle.toUpperCase()}**!`;
+    }
+
+    // 5. Randomize / New Field
+    else if (text.includes('random') || text.includes('new field') || text.includes('seed')) {
+      randomize();
+      responseText = `Generated a **new field state** (Seed: ${seed})! No two fields ever resolve into the exact same image.`;
+    }
+
+    // 6. Project Questions
+    else if (text.includes('creator') || text.includes('who built') || text.includes('who made') || text.includes('author') || text.includes('tapasvi') || text.includes('suhas')) {
+      responseText = `**ECHO / FIELD** was created by **Tapasvi** (Art Direction, Experience & Visual System) and **Suhas** (Creative Code, Systems & Sound) for Hack the Arts 2026.`;
+    }
+    else if (text.includes('what is') || text.includes('about') || text.includes('project') || text.includes('story') || text.includes('hack')) {
+      responseText = `**ECHO / FIELD** is a browser-native visual instrument for making art from attention. Rather than rendering pre-made images, every contour and particle is generated live using HTML Canvas 2D, Web Audio API, and MediaPipe gesture tracking.`;
+    }
+    else if (text.includes('tech') || text.includes('built with') || text.includes('how it works') || text.includes('code') || text.includes('canvas')) {
+      responseText = `ECHO FIELD is built with pure HTML5 Canvas 2D, vanilla JavaScript, Web Audio API frequency analysis, and MediaPipe Hands for camera tracking. Zero heavy external dependencies!`;
+    }
+    else {
+      responseText = `I've analyzed your prompt! You can ask me to change soundwave colors (e.g. *"Set colors to cyan & pink"*), change modes (*"Switch to HAND mode"*), play sound presets (*"Play Cyber Pulse"*), or load custom YouTube song links. What would you like to adjust?`;
+    }
+
+    appendChatMessage('assistant', responseText);
+  }, 400);
+}
+
 // Initialization
 updateCustomPalette();
 buildWave();
@@ -1376,3 +1668,4 @@ resizeSiteParticles();
 updateSiteScroll();
 requestAnimationFrame(drawSiteParticles);
 animate();
+

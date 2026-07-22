@@ -150,6 +150,7 @@
         <div class="top-actions">
           <button class="text-button" id="howItWorks">HOW IT WORKS</button>
           <button class="text-button" id="toggleInspector">INSPECTOR</button>
+          <button class="text-button" id="presetCycleBtn">PRESET: AMBIENT</button>
           <button class="text-button" id="toggleSound">SOUND: OFF</button>
           <div class="live-state"><span class="live-dot"></span><span id="statusText">IDLE</span></div>
         </div>
@@ -331,6 +332,51 @@
         <h2>Optimal Experience</h2>
         <p>ECHO / FIELD is heavily interactive and is highly recommended to be opened on a PC.</p>
         <button class="begin-button" id="dismissMobileWarning">CONTINUE ANYWAY <span>→</span></button>
+      </div>
+    </div>
+
+    <!-- Bottom-Left AI Chatbot Widget -->
+    <div class="ai-chat-widget" id="aiChatWidget">
+      <button class="ai-chat-toggle" id="aiChatToggle" aria-label="Open Echo AI Assistant">
+        <span class="chat-spark">✨</span>
+        <span class="chat-toggle-text">AI ASSISTANT</span>
+        <span class="chat-badge" id="chatBadge">LIVE</span>
+      </button>
+
+      <div class="ai-chat-box" id="aiChatBox" hidden>
+        <div class="ai-chat-header">
+          <div class="ai-chat-title">
+            <span class="ai-status-dot"></span>
+            <div>
+              <strong>ECHO / AI</strong>
+              <small>Soundwave & Field Assistant</small>
+            </div>
+          </div>
+          <button class="close-chat" id="closeChat" aria-label="Close Chat">×</button>
+        </div>
+
+        <div class="ai-chat-messages" id="chatMessages">
+          <div class="chat-msg assistant">
+            <div class="msg-author">ECHO AI</div>
+            <div class="msg-content">Hello! I can make changes to the main soundwave section (colors, modes, presets) and answer questions about ECHO FIELD. Try prompting me below!</div>
+          </div>
+        </div>
+
+        <div class="chat-prompts-container">
+          <span class="prompts-label">EXAMPLE PROMPTS</span>
+          <div class="prompt-chips" id="promptChips">
+            <button class="prompt-chip" data-prompt="Set colors to Cyan & Magenta">🎨 Cyan & Magenta</button>
+            <button class="prompt-chip" data-prompt="Switch mode to HAND tracking">⊙ Hand Mode</button>
+            <button class="prompt-chip" data-prompt="Play Cyber Pulse sound preset">⚡ Cyber Pulse</button>
+            <button class="prompt-chip" data-prompt="Who created ECHO FIELD?">👥 About Project</button>
+            <button class="prompt-chip" data-prompt="Change visual form to Orbit">🌀 Orbit Form</button>
+          </div>
+        </div>
+
+        <form class="chat-input-form" id="chatInputForm">
+          <input type="text" id="chatInput" placeholder="Ask AI to change colors, mode, sound, or ask a question..." autocomplete="off" />
+          <button type="submit" id="chatSendBtn" aria-label="Send message"><span>➔</span></button>
+        </form>
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
